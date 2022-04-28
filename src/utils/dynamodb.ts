@@ -1,7 +1,7 @@
 import AWS from "aws-sdk";
 
 const MOCK_DYNAMODB_ENDPOINT = process.env.MOCK_DYNAMODB_ENDPOINT;
-const TableName = "prod-nft-table";
+const TableName = "defillama_nft_collections";
 
 const client = new AWS.DynamoDB.DocumentClient({
   ...(MOCK_DYNAMODB_ENDPOINT
@@ -11,7 +11,7 @@ const client = new AWS.DynamoDB.DocumentClient({
         region: "local",
       }
     : {
-        region: "eu-west-2", // For running the adapters locally but using the prod DB
+        region: "us-east-2", // For running the adapters locally but using the prod DB
       }),
 });
 

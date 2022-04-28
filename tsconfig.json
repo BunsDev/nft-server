@@ -11,9 +11,8 @@
     "sourceMap": true,
     "allowJs": true,
     "baseUrl": ".",
-    "types": [
-      "node"
-    ],
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
     "paths": {
       "*": [
         "node_modules/*",

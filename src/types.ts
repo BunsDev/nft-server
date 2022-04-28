@@ -67,11 +67,11 @@ export interface CollectionData {
   symbol: string;
   description: string;
   logo: string;
-  website: string;
-  discord_url: string;
-  telegram_url: string;
-  twitter_username: string;
-  medium_username: string;
+  website?: string;
+  discord_url?: string;
+  telegram_url?: string;
+  twitter_username?: string;
+  medium_username?: string;
   chains?: Blockchain[];
   marketplaces?: Marketplace[];
 }

@@ -40,6 +40,7 @@ Resources:
               - owners
               - chains
               - marketplaces
+              - lastBlockHeight
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
       # Set the capacity to auto-scale

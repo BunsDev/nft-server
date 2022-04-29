@@ -1,13 +1,14 @@
 import Web3 from "web3";
 import Database from "better-sqlite3";
 import { BlockTransactionObject, Transaction } from "web3-eth";
-import { ethers, BigNumber } from "ethers";
+import { ethers, BigNumber, Event } from "ethers";
 import {
   LogDescription,
   /* TransactionDescription, */
 } from "@ethersproject/abi/lib/interface";
 import winston from "winston";
 import OPENSEA_ABI from "./opensea.abi.json";
+import { EventFragment } from "ethers/lib/utils";
 
 const LOGGER = winston.createLogger({
   levels: winston.config.syslog.levels,
@@ -49,8 +50,19 @@ const ETH_USD = 2800;
 
 const DB = new Database("./opensea.db", { verbose: LOGGER.debug });
 
+const web3 = new Web3("http://192.168.1.137:8545");
+const ethProvider = new ethers.providers.StaticJsonRpcProvider("http://192.168.1.137:8545");
+
 const OPENSEA_CONTRACT_ADDRESS = "0x7f268357a8c2552623316e2562d90e642bb538e5";
 const OpenseaContractInterface = new ethers.utils.Interface(OPENSEA_ABI);
+const OpenSeaContract = new ethers.Contract(
+  OPENSEA_CONTRACT_ADDRESS,
+  OPENSEA_ABI,
+  ethProvider
+);
+const OpenSeaOrdersMatched = ethers.utils.id(
+  "event OrdersMatched (bytes32 buyHash, bytes32 sellHash, address indexed maker, address indexed taker, uint price, bytes32 indexed metadata)"
+);
 
 const ERC721ContractInterface = new ethers.utils.Interface([
   "event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId)",
@@ -67,7 +79,7 @@ const ERC1155ContractInterface = new ethers.utils.Interface([
 
 const lastBlockHeight = 14652292;
 
-const web3 = new Web3("http://192.168.1.137:8545");
+
 
 DB.exec(`
 DROP TABLE "sales";
@@ -91,11 +103,34 @@ const saleInsertStmt = DB.prepare(`
 async function main() {
   const currentBlockNumber: number = await web3.eth.getBlockNumber();
 
-  for (let i: number = lastBlockHeight; i < currentBlockNumber; i++) {
-    const block: BlockTransactionObject = await web3.eth.getBlock(i, true);
-    console.log(`Info about block ${block.hash}(${block.number}):`);
-    console.log(`txCount: ${block.transactions.length}`);
-    await processTxes(block.transactions);
+  // for (let i: number = lastBlockHeight; i < currentBlockNumber; i++) {
+  //   const block: BlockTransactionObject = await web3.eth.getBlock(i, true);
+  //   console.log(`Info about block ${block.hash}(${block.number}):`);
+  //   console.log(`txCount: ${block.transactions.length}`);
+  //   OpenseaContractInterface.getEvent
+  //   await processTxes(block.transactions);
+  // }
+
+  for (let i = 0; i <= currentBlockNumber - lastBlockHeight; i += 100) {
+    const fromBlock = lastBlockHeight + i;
+    const toBlock = fromBlock + 100;
+    LOGGER.debug(
+      `Filter logs between block ${fromBlock} to ${toBlock} diff ${
+        toBlock - fromBlock
+      }`
+    );
+    const events: Array<Event> = await OpenSeaContract.queryFilter(
+      {
+        address: OPENSEA_CONTRACT_ADDRESS,
+        topics: OpenseaContractInterface.encodeFilterTopics(
+          OpenseaContractInterface.getEvent("OrdersMatched"),
+          []
+        ),
+      },
+      fromBlock,
+      toBlock
+    );
+    console.log(events);
   }
 }
 

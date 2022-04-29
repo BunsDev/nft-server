@@ -1,0 +1,57 @@
+{
+  "ethereum":
+  {
+      "address": "https://eth-mainnet.gateway.pokt.network/v1/5f3453978e354ab992c4da79,https://cloudflare-eth.com/,https://main-light.eth.linkpool.io/,https://api.mycryptoapi.com/eth",
+      "chainId": 1
+  },
+  "bsc":
+  {
+      "address": "https://bsc-dataseed.binance.org/,https://bsc-dataseed1.defibit.io/,https://bsc-dataseed1.ninicoin.io/,https://bsc-dataseed2.defibit.io/,https://bsc-dataseed2.ninicoin.io/",
+      "chainId": 56
+  },
+  "polygon":
+  {
+      "address": "https://polygon-rpc.com/,https://rpc-mainnet.maticvigil.com/",
+      "chainId": 137
+  },
+  "heco":
+  {
+      "address": "https://http-mainnet.hecochain.com,https://http-mainnet-node.huobichain.com,https://pub001.hg.network/rpc",
+      "chainId": 128
+  },
+  "fantom":
+  {
+      "address": "https://rpc.ankr.com/fantom,https://rpc.ftm.tools/,https://rpcapi.fantom.network",
+      "chainId": 250
+  },
+  "rsk":
+  {
+      "address": "https://public-node.rsk.co",
+      "chainId": 30
+  },
+  "tomochain":
+  {
+      "address": "https://rpc.tomochain.com",
+      "chainId": 88
+  },
+  "xdai":
+  {
+      "address": "https://rpc.xdaichain.com/,https://xdai.poanetwork.dev,https://dai.poa.network,https://xdai-archive.blockscout.com",
+      "chainId": 100
+  },
+  "avax":
+  {
+      "address": "https://api.avax.network/ext/bc/C/rpc,https://rpc.ankr.com/avalanche",
+      "chainId": 43114
+  },
+  "wan":
+  {
+      "address": "https://gwan-ssl.wandevs.org:56891",
+      "chainId": 888
+  },
+  "harmony":
+  {
+      "address": "https://harmony-0-rpc.gateway.pokt.network,https://api.harmony.one,https://api.s0.t.hmny.io",
+      "chainId": 1666600000
+  }
+}

@@ -1,9 +1,13 @@
 import { IOnChainProvider } from "../interfaces/IOnChainProvider";
 import { Provider } from "@ethersproject/abstract-provider";
-import { BaseOnChainProvider } from "./BaseOnChainProvider";
 
-export class EthereumOnChainProvider extends BaseOnChainProvider {
-  constructor(chainProvider: Provider) {
-    super(chainProvider);
+export class EthereumOnChainProvider implements IOnChainProvider {
+  constructor(public provider: Provider) {
+    console.log(this.provider);
   }
+
+  getSales(): void {
+    throw new Error("Method not implemented.");
+  }
+  
 }

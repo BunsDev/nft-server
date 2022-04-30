@@ -14,40 +14,15 @@
       "address": "https://polygon-rpc.com/,https://rpc-mainnet.maticvigil.com/",
       "chainId": 137
   },
-  "heco":
-  {
-      "address": "https://http-mainnet.hecochain.com,https://http-mainnet-node.huobichain.com,https://pub001.hg.network/rpc",
-      "chainId": 128
-  },
   "fantom":
   {
       "address": "https://rpc.ankr.com/fantom,https://rpc.ftm.tools/,https://rpcapi.fantom.network",
       "chainId": 250
   },
-  "rsk":
-  {
-      "address": "https://public-node.rsk.co",
-      "chainId": 30
-  },
-  "tomochain":
-  {
-      "address": "https://rpc.tomochain.com",
-      "chainId": 88
-  },
-  "xdai":
-  {
-      "address": "https://rpc.xdaichain.com/,https://xdai.poanetwork.dev,https://dai.poa.network,https://xdai-archive.blockscout.com",
-      "chainId": 100
-  },
   "avax":
   {
       "address": "https://api.avax.network/ext/bc/C/rpc,https://rpc.ankr.com/avalanche",
       "chainId": 43114
-  },
-  "wan":
-  {
-      "address": "https://gwan-ssl.wandevs.org:56891",
-      "chainId": 888
   },
   "harmony":
   {

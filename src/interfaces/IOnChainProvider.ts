@@ -1,11 +1,9 @@
-import { Provider } from "@ethersproject/abstract-provider";
 import { Blockchain } from "../types";
+import { Provider } from "@ethersproject/abstract-provider";
 
 export interface IOnChainProvider {
   provider: Provider;
   getSales(): void;
 }
 
-export type ChainProviders = {
-  [index in Blockchain]: IOnChainProvider;
-};
+export type ChainProviders = Partial<Record<Blockchain, IOnChainProvider>>;

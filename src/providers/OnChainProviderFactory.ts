@@ -1,4 +1,4 @@
-import { IOnChainProvider } from "src/interfaces";
+import { IOnChainProvider } from "../interfaces";
 import { Provider } from "@ethersproject/abstract-provider";
 import { Blockchain } from "../types";
 import { EthereumOnChainProvider } from "./EthereumOnChainProvider";
@@ -16,15 +16,9 @@ type Rpcs = {
 
 export const Addresses = rpcAddresses as unknown as Rpcs;
 
-export abstract class BaseOnChainProvider implements IOnChainProvider {
-  private chainProvider: Provider;
-
-  constructor(chainProvider: Provider) {
-    this.chainProvider = chainProvider;
-  }
-
+export class OnChainProviderFactory {
   static getOnChainProvider(name: Blockchain): IOnChainProvider {
-    if (name in providers && name in ) {
+    if (name in providers && name in chains) {
       return new chains[name](providers[name]);
     }
     return null;
@@ -38,9 +32,11 @@ function getRpcAddress(chain: Blockchain, defaultAddress: string) {
 function createProvider(name: Blockchain) {
   const { address, chainId } = Addresses[name];
   const addresses = getRpcAddress(name, address).split(/,/);
-  return new ethers.providers.FallbackProvider(addresses.map(a => 
-    new ethers.providers.StaticJsonRpcProvider(a, { name, chainId })
-  ));
+  return new ethers.providers.FallbackProvider(
+    addresses.map(
+      (a) => new ethers.providers.StaticJsonRpcProvider(a, { name, chainId })
+    )
+  );
 }
 
 export const providers = {
@@ -49,8 +45,12 @@ export const providers = {
   [chain in Blockchain]: Provider;
 };
 
+interface IOnChainProviderConstructable {
+  new (...args: any): IOnChainProvider;
+}
+
 export const chains = {
   [Blockchain.Ethereum]: EthereumOnChainProvider,
-} as {
-  [chain in Blockchain]: IOnChainProvider;
+} as unknown as {
+  [chain in Blockchain]: IOnChainProviderConstructable;
 };

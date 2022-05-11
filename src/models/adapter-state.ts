@@ -1,6 +1,9 @@
 import { Blockchain, Marketplace } from "../types";
 import dynamodb from "../utils/dynamodb";
 
+// really no point is scanning before this block (punks)
+export const EARLIEST_BLOCK = 4797962;
+
 export class AdapterState {
   name: string;
   lastSyncedBlockNumber: bigint;
@@ -9,11 +12,11 @@ export class AdapterState {
     await dynamodb.put({
       PK: `adapterState`,
       SK: `moralis#${chain}`,
-      lastSyncedBlockNumber: 0,
+      lastSyncedBlockNumber: EARLIEST_BLOCK,
     });
 
     return {
-      lastSyncedBlockNumber: 0,
+      lastSyncedBlockNumber: EARLIEST_BLOCK,
     };
   }
 
@@ -52,25 +55,16 @@ export class AdapterState {
 
   static async createSalesAdapterState(
     marketplace: Marketplace,
-    chain: Blockchain = null,
-    startBlock: number = 0,
-    isMultiChain: boolean = false
+    chain: Blockchain = Blockchain.Ethereum,
+    startBlock = EARLIEST_BLOCK
   ) {
-    if (isMultiChain) {
-      await dynamodb.put({
-        PK: `adapterState`,
-        SK: `sales#chain#${chain}#marketplace#${marketplace}`,
-        lastSyncedBlockNumber: startBlock,
-      });
-
-      return {
-        lastSyncedBlockNumber: startBlock,
-      };
+    if (!startBlock) {
+      startBlock = EARLIEST_BLOCK;
     }
 
     await dynamodb.put({
       PK: `adapterState`,
-      SK: `sales#${marketplace}`,
+      SK: `sales#chain#${chain}#marketplace#${marketplace}`,
       lastSyncedBlockNumber: startBlock,
     });
 
@@ -81,38 +75,28 @@ export class AdapterState {
 
   static async getSalesAdapterState(
     marketplace: Marketplace,
-    chain: Blockchain = null,
-    isMultiChain: boolean = false
+    chain: Blockchain = Blockchain.Ethereum,
+    createIfMissing = false,
+    defaultBlock?: number
   ) {
-    if (isMultiChain) {
-      return dynamodb
-        .query({
-          KeyConditionExpression: "PK = :pk and SK = :sk",
-          ExpressionAttributeValues: {
-            ":pk": "adapterState",
-            ":sk": `sales#chain#${chain}#marketplace#${marketplace}`,
-          },
-        })
-        .then((result) => {
-          const results = result.Items;
-          if (results.length) {
-            return results[0];
-          }
-        });
-    }
-
     return dynamodb
       .query({
         KeyConditionExpression: "PK = :pk and SK = :sk",
         ExpressionAttributeValues: {
           ":pk": "adapterState",
-          ":sk": `sales#${marketplace}`,
+          ":sk": `sales#chain#${chain}#marketplace#${marketplace}`,
         },
       })
       .then((result) => {
         const results = result.Items;
         if (results.length) {
           return results[0];
+        } else if (createIfMissing) {
+          return AdapterState.createSalesAdapterState(
+            marketplace,
+            chain,
+            defaultBlock
+          );
         }
       });
   }
@@ -120,26 +104,12 @@ export class AdapterState {
   static async updateSalesLastSyncedBlockNumber(
     marketplace: Marketplace,
     blockNumber: number,
-    chain: Blockchain = null,
-    isMultiChain: boolean = false
+    chain: Blockchain = Blockchain.Ethereum
   ) {
-    if (isMultiChain) {
-      return dynamodb.update({
-        Key: {
-          PK: `adapterState`,
-          SK: `sales#chain#${chain}#marketplace#${marketplace}`,
-        },
-        UpdateExpression: "SET lastSyncedBlockNumber = :blockNumber",
-        ExpressionAttributeValues: {
-          ":blockNumber": blockNumber,
-        },
-      });
-    }
-
     return dynamodb.update({
       Key: {
         PK: `adapterState`,
-        SK: `sales#${marketplace}`,
+        SK: `sales#chain#${chain}#marketplace#${marketplace}`,
       },
       UpdateExpression: "SET lastSyncedBlockNumber = :blockNumber",
       ExpressionAttributeValues: {

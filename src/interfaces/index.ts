@@ -1,4 +1,4 @@
-export { IOnChainProvider, ChainProviders } from "./IOnChainProvider";
+export { IOnChainProvider } from "./IOnChainProvider";
 export {
   IMarketOnChainProvider,
   MarketChainProviders,

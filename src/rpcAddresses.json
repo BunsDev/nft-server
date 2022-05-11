@@ -1,6 +1,11 @@
 {
   "ethereum":
   {
+      "address": "https://api.mycryptoapi.com/eth",
+      "chainId": 1
+  },
+  "_ethereum":
+  {
       "address": "https://eth-mainnet.gateway.pokt.network/v1/5f3453978e354ab992c4da79,https://cloudflare-eth.com/,https://main-light.eth.linkpool.io/,https://api.mycryptoapi.com/eth",
       "chainId": 1
   },

@@ -130,9 +130,28 @@ async function main() {
       fromBlock,
       toBlock
     );
-    console.log(events);
+    // processEvents(events);
   }
 }
+
+// async function processEvents(events: Event[]) {
+//   for (const event of events) {
+//     const { price } = event.args;
+//     const priceGwei = price.div(GWEI);
+//     const 
+
+//     LOGGER.debug(`OrdersMatched price: ${price}`);
+
+//     saleInsertStmt.run(
+//       txDecoded.collectionAddress,
+//       1,
+//       priceGwei.toBigInt(),
+//       getUSDValue(priceGwei),
+//       priceGwei.toBigInt(),
+//       getUSDValue(priceGwei)
+//     );
+//   }
+// }
 
 async function processTxes(transactions: Transactions) {
   // eslint-disable-next-line no-labels

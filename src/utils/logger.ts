@@ -13,7 +13,7 @@ type LogOptions = {
 
 export function getLogger(name: string, options?: LogOptions): winston.Logger {
   const {
-    console = true,
+    console: _console = true,
     error = true,
     info = true,
     debug = true,
@@ -21,14 +21,14 @@ export function getLogger(name: string, options?: LogOptions): winston.Logger {
     levels = null,
     transports = null,
     path = "./",
-  } = options;
+  } = options || {};
   return winston.createLogger({
     levels: levels ?? winston.config.syslog.levels,
     format: format ?? winston.format.json(),
     transports:
       transports ??
       [
-        console && new winston.transports.Console(),
+        _console && new winston.transports.Console(),
         error &&
           new winston.transports.File({
             filename: `${path}${name}.error.log`,

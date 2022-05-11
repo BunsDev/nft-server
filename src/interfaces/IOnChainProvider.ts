@@ -1,9 +1,7 @@
 import { Blockchain } from "../types";
-import { Provider } from "@ethersproject/abstract-provider";
 
-export interface IOnChainProvider {
-  provider: Provider;
+export interface IOnChainProvider<T> {
+  provider: T;
   getSales(): void;
+  getCurrentBlockNumber(): Promise<number>;
 }
-
-export type ChainProviders = Partial<Record<Blockchain, IOnChainProvider>>;

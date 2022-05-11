@@ -1,7 +1,7 @@
 import { IOnChainProvider } from "../interfaces/IOnChainProvider";
 import { Provider } from "@ethersproject/abstract-provider";
 
-export class EthereumOnChainProvider implements IOnChainProvider {
+export class EthereumOnChainProvider implements IOnChainProvider<Provider> {
   constructor(public provider: Provider) {
     console.log(this.provider);
   }
@@ -9,5 +9,8 @@ export class EthereumOnChainProvider implements IOnChainProvider {
   getSales(): void {
     throw new Error("Method not implemented.");
   }
-  
+
+  public async getCurrentBlockNumber(): Promise<number> {
+    return await this.provider.getBlockNumber();
+  }
 }

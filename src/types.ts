@@ -107,3 +107,9 @@ export interface SaleData {
   marketplace: Marketplace;
   chain: Blockchain;
 }
+
+export type HumanABI = string[];
+
+export type ERCStandard = {
+  abi: HumanABI;
+};

@@ -5,26 +5,28 @@ export interface DataAdapter {
   run: () => Promise<void>;
 }
 
+declare const __dirname: string;
+
 const adapters: string[] = [
-  "moralis",
-  "pancakeswap",
-  //"opensea",
-  "random-earth",
-  //"magic-eden",
-  "immutablex",
-  "treasure",
-  "jpg-store",
-  "nftrade",
-  "paintswap",
-  "defi-kingdoms",
-  "nftkey",
+  // "moralis",
+  // "pancakeswap",
+  "opensea",
+  // "random-earth",
+  // "magic-eden",
+  // "immutablex",
+  // "treasure",
+  // "jpg-store",
+  // "nftrade",
+  // "paintswap",
+  // "defi-kingdoms",
+  // "nftkey",
 ];
 
-const spawnChildProcess = (adapterName: string, attempt: number = 1) => {
+const spawnChildProcess = (adapterName: string, attempt = 1) => {
   const child = fork(__dirname + "/" + adapterName);
 
   child.on("exit", (exitCode) => {
-    if (attempt > 5) {
+    if (attempt > 1) {
       console.log(
         `${adapterName}-adapter: returned with code ${exitCode}, stopping after too many attempts.`
       );

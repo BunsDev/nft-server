@@ -90,8 +90,7 @@ async function runSales(): Promise<void> {
       adapterState = await AdapterState.createSalesAdapterState(
         adapterMarketplace,
         chain,
-        adapterAddresses[chain].blockCreated,
-        true
+        adapterAddresses[chain].blockCreated
       );
     }
 
@@ -200,8 +199,7 @@ async function fetchSales(
         await AdapterState.updateSalesLastSyncedBlockNumber(
           adapterMarketplace,
           latestBlock,
-          chain,
-          true
+          chain
         );
       }
     }

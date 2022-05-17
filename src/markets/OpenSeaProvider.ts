@@ -29,11 +29,12 @@ import {
 } from "../constants";
 import { ParseErrors, UnparsableLogError } from "../utils/UnparsableLogError";
 
-const LOGGER = getLogger("opensea");
+const LOGGER = getLogger("OPENSEA_PROVIDER", {
+  datadog: !!process.env.DATADOG_API_KEY,
+});
 
 const MATURE_BLOCK_AGE = 250;
-const EARLIEST_BLOCK = 4797962;
-const BLOCK_RANGE = 100;
+const BLOCK_RANGE = 250;
 
 /**
  * OS Market Chain Provider
@@ -89,6 +90,7 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
       const currentBlock: number = await this.chains[
         chain
       ].getCurrentBlockNumber();
+      const lastMatureBlock = currentBlock - MATURE_BLOCK_AGE;
       let { lastSyncedBlockNumber } = await AdapterState.getSalesAdapterState(
         Marketplace.Opensea,
         chain,
@@ -111,38 +113,68 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
         ),
         []
       );
+
+      if (lastMatureBlock - lastSyncedBlockNumber <= MATURE_BLOCK_AGE) {
+        LOGGER.error(`Not enough mature blocks to scan.`, {
+          currentBlock,
+          lastMatureBlock,
+          lastSyncedBlockNumber,
+        });
+        return;
+      }
+
       // eslint-disable-next-line no-unreachable-loop
       for (
-        let i = -1;
-        i < currentBlock - lastSyncedBlockNumber;
-        i += BLOCK_RANGE
+        let i = 0;
+        i < lastMatureBlock - lastSyncedBlockNumber;
+        i += BLOCK_RANGE + 1
       ) {
-        const fromBlock = lastSyncedBlockNumber + i + 1;
-        const toBlock = fromBlock + BLOCK_RANGE - 1;
-        const events: Array<Event> = (
-          await contract.queryFilter(
-            {
-              address: contractAddress,
-              topics: filterTopics,
-            },
+        const fromBlock = lastSyncedBlockNumber + i;
+        const toBlock =
+          fromBlock + BLOCK_RANGE > currentBlock
+            ? currentBlock
+            : fromBlock + BLOCK_RANGE;
+
+        LOGGER.info("Searching blocks: ", {
+          fromBlock,
+          toBlock,
+          range: toBlock - fromBlock,
+        });
+
+        try {
+          const events: Array<Event> = (
+            await contract.queryFilter(
+              {
+                address: contractAddress,
+                topics: filterTopics,
+              },
+              fromBlock,
+              toBlock
+            )
+          ).filter((e) => !e.removed);
+
+          LOGGER.info(
+            `Found ${events.length} events between ${fromBlock} to ${toBlock}`
+          );
+
+          if (events.length) {
+            yield {
+              chain,
+              events,
+              blockRange: {
+                startBlock: fromBlock,
+                endBlock: toBlock,
+              },
+              receipts: await this.getEventReceipts(events, chain),
+            };
+          }
+        } catch (e) {
+          LOGGER.error(`Query error`, {
+            error: e.message,
+            reason: e.reason,
             fromBlock,
-            toBlock
-          )
-        ).filter((e) => !e.removed);
-        console.log(`Searching ${toBlock - fromBlock} blocks`);
-        console.log(
-          `Found ${events.length} events between ${fromBlock} to ${toBlock}`
-        );
-        if (events.length) {
-          yield {
-            chain,
-            events,
-            blockRange: {
-              startBlock: fromBlock,
-              endBlock: toBlock,
-            },
-            receipts: await this.getEventReceipts(events, chain),
-          };
+            toBlock,
+          });
         }
       }
       break;
@@ -156,12 +188,20 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
     const receipts: TxReceiptsWithMetadata = {};
     // return receipts;
     for (const event of events) {
+      const receipt: TransactionReceipt = await event.getTransactionReceipt();
       if (!(event.transactionHash in receipts)) {
-        const receipt: TransactionReceipt = await event.getTransactionReceipt();
         receipts[event.transactionHash] = {
           receipt,
-          meta: this.getEventMetadata(event, receipt, chain),
+          meta: [this.getEventMetadata(event, receipt, chain)],
         };
+      } else {
+        LOGGER.info(`Multi-sale TX`, {
+          event,
+          receipt,
+        });
+        receipts[event.transactionHash].meta.push(
+          this.getEventMetadata(event, receipt, chain)
+        );
       }
     }
     return receipts;
@@ -170,88 +210,173 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
   public getEventMetadata(
     event: Event,
     receipt: TransactionReceipt,
-    chain = Blockchain.Ethereum,
-    skipStandard = false
+    chain = Blockchain.Ethereum
   ): EventMetadata {
     const { logs } = receipt;
-    const { maker, taker, price } = event.args;
-    const eventMetadata: EventMetadata = {
+    const { price: originalPrice } = event.args;
+    let eventMetadata: EventMetadata = {
       contractAddress: null,
       eventSignatures: [],
-      maker,
-      taker,
-      price,
+      buyer: null,
+      seller: null,
+      tokenID: null,
+      price: originalPrice,
+      data: null,
     };
 
-    // Standard ETH OS NFT buy, we should have one
-    // Approval and one Transfer log, unless we skipStandard
-    // which means we uncovered something unconventional
+    let eventSigs,
+      isERC721,
+      isERC1155,
+      hasERC20,
+      ERC20Logs,
+      ERC721Logs,
+      ERC1155Logs;
+
+    let relevantLogs;
+
     try {
       const parsedLogs: EventLogType[] = logs.map((l) =>
         this.parseLog(l, chain)
       );
-      const { eventNames, eventSigs } = this.extractParsedLogs(parsedLogs);
+      const eventIndex = this.getEventIndex(event, parsedLogs);
+      const eventLog = parsedLogs[eventIndex];
+      relevantLogs = this.findEventRelevantLogs(event, parsedLogs, eventIndex);
+      ({
+        eventSigs,
+        isERC721,
+        isERC1155,
+        hasERC20,
+        ERC20Logs,
+        ERC721Logs,
+        ERC1155Logs,
+      } = this.reduceParsedLogs(relevantLogs));
+      const price = hasERC20 ? this.getERC20Price(ERC20Logs) : originalPrice;
       eventMetadata.eventSignatures = eventSigs;
-      if (logs.length === 3 && !skipStandard) {
-        // very simple and shallow test, and we can do better
-        if (eventNames.join() !== this.getStandardSaleEvents(chain)) {
-          console.log(
-            "Skipping standard",
-            receipt.transactionHash,
-            eventNames,
-            this.getStandardSaleEvents(chain)
-          );
-          return this.getEventMetadata(event, receipt, chain, true);
+
+      LOGGER.info(`Found event index from ${parsedLogs.length} receipt logs`, {
+        idx: eventIndex,
+        tx: receipt.transactionHash,
+        event: event.event,
+        type: eventLog.type.toString(),
+        nRelevantLogs: relevantLogs.length,
+        isERC721,
+        isERC1155,
+        hasERC20,
+      });
+
+      if (isERC721) {
+        const ERC721Transfer = (ERC721Logs as EventLogType[]).find(
+          (l) => l.log.name === "Transfer"
+        );
+
+        if (ERC721Transfer) {
+          const [, seller, buyer, tokenID] = ERC721Transfer.topics;
+          eventMetadata = {
+            ...eventMetadata,
+            seller: ethers.utils.hexStripZeros(seller),
+            buyer: ethers.utils.hexStripZeros(buyer),
+            tokenID,
+            contractAddress: ERC721Transfer.contract,
+            data: ERC721Transfer.decodedData,
+          };
+          LOGGER.info(`ERC721Transfer`, {
+            ...eventMetadata,
+            tx: receipt.transactionHash,
+          });
+          return eventMetadata;
         }
-        eventMetadata.contractAddress = logs[0].address;
-      }
-      // this could be OS storefront sale
-      else if (logs.length === 2 && !skipStandard) {
-        if (eventNames.join() !== this.getStandardOSStorefrontSale(chain)) {
-          console.log(
-            "Skipping standard OS storefront",
-            receipt.transactionHash,
-            eventNames,
-            this.getStandardOSStorefrontSale(chain)
-          );
-          return this.getEventMetadata(event, receipt, chain, true);
+      } else if (isERC1155) {
+        const ERC1155TransferSingle = (ERC1155Logs as EventLogType[]).find(
+          (l) => l.log.name === "TransferSingle"
+        );
+        const ERC1155TransferBatch = (ERC1155Logs as EventLogType[]).find(
+          (l) => l.log.name === "TransferBatch"
+        );
+        if (ERC1155TransferSingle) {
+          const [, seller, buyer] = ERC1155TransferSingle.decodedData;
+          eventMetadata = {
+            ...eventMetadata,
+            seller: ethers.utils.hexStripZeros(seller),
+            buyer: ethers.utils.hexStripZeros(buyer),
+            tokenID: null,
+            data: ERC1155TransferSingle.decodedData,
+          };
+          LOGGER.info(`ERC1155TransferSingle`, {
+            ...eventMetadata,
+            tx: receipt.transactionHash,
+          });
+          return eventMetadata;
+        } else if (ERC1155TransferBatch) {
+          // TODO
+          LOGGER.info(`ERC1155TransferBatch`, {
+            ...eventMetadata,
+            tx: receipt.transactionHash,
+          });
+          return eventMetadata;
         }
-        eventMetadata.contractAddress = logs[0].address;
-      } else {
-        if (!maker || !taker || !price) return null;
       }
+
+      this.warnNonStandardEventLogs(eventIndex, event, receipt);
+      return eventMetadata;
     } catch (e) {
-      console.log(e);
+      LOGGER.error(`Retrieving event metadata failed`, {
+        eventMetadata,
+        event,
+        receipt,
+        ERCRelevantLogs: isERC721 ? ERC721Logs : ERC1155Logs,
+        ERC20: hasERC20 ? ERC20Logs : [null],
+        relevantLogs,
+      });
     } finally {
       // eslint-disable-next-line no-unsafe-finally
       return eventMetadata;
     }
   }
 
-  public extractParsedLogs(parsedLogs: EventLogType[]) {
-    return parsedLogs.reduce(
+  public warnNonStandardEventLogs(
+    eventIndex: number,
+    event: Event,
+    receipt: TransactionReceipt
+  ) {
+    LOGGER.warn(`Event is NON_STANDARD`, { eventIndex, event, receipt });
+  }
+
+  public getERC20Price(logs: EventLogType[]): BigNumber {
+    return null;
+  }
+
+  public reduceParsedLogs(parsedRelevantLogs: EventLogType[]) {
+    return parsedRelevantLogs.reduce(
       (c, l) => {
         c.eventNames.push(l.log.name);
         c.eventSigs.push(l.log.signature);
+
+        if (l.type === LogType.ERC721) {
+          c.isERC721 = true;
+          c.ERC721Logs.push(l);
+        } else if (l.type === LogType.ERC1155) {
+          c.isERC1155 = true;
+          c.ERC1155Logs.push(l);
+        }
+
+        if (l.type === LogType.ERC20) {
+          c.hasERC20 = true;
+          c.ERC20Logs.push(l);
+        }
+
         return c;
       },
       {
         eventNames: [],
         eventSigs: [],
+        ERC20Logs: [],
+        ERC721Logs: [],
+        ERC1155Logs: [],
+        isERC721: false,
+        isERC1155: false,
+        hasERC20: false,
       }
     );
-  }
-
-  public getStandardOSStorefrontSale(chain: Blockchain) {
-    return ["TransferSingle", this.config.chains[chain].saleEventName].join();
-  }
-
-  public getStandardSaleEvents(chain: Blockchain) {
-    return [
-      "Approval",
-      "Transfer",
-      this.config.chains[chain].saleEventName,
-    ].join();
   }
 
   public parseLog(log: Log, chain: Blockchain): EventLogType {
@@ -263,11 +388,32 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
       [Marketplace.Opensea]: this.contracts[chain].interface,
     };
 
-    const parsed: EventLogType = { log: null, type: null };
+    const parsed: EventLogType = {
+      log: null,
+      type: null,
+      contract: log.address,
+      topics: log.topics,
+      errors: [],
+    };
     for (const lType of Object.keys(parsers) as LogType[] | Marketplace[]) {
       try {
         parsed.log = parsers[lType].parseLog(log);
         parsed.type = lType;
+        try {
+          parsed.decodedData = parsers[lType].decodeEventLog(
+            parsed.log.name,
+            log.data,
+            log.topics
+          );
+        } catch (evtLogErr) {
+          LOGGER.error(`Failed to decode event log data`, {
+            lType,
+            evtLogErr,
+            name: parsed.log.name,
+            data: log.data,
+            topics: log.topics,
+          });
+        }
         break;
       } catch (e) {
         errors[lType] = e;
@@ -275,9 +421,50 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
     }
 
     if (Object.keys(errors).length === Object.keys(parsers).length) {
-      throw new UnparsableLogError(log, errors);
+      parsed.log = null;
+      parsed.type = LogType.UNKNOWN;
+      parsed.errors.push(new UnparsableLogError(log, errors));
     }
 
     return parsed;
+  }
+
+  public getEventIndex(event: Event, parsedLogs: EventLogType[]): number {
+    for (let i = parsedLogs.length - 1; i >= 0; i--) {
+      const evtParsedLog = parsedLogs[i];
+      if (event.topics[0] === evtParsedLog.log.topic) {
+        return i;
+      }
+    }
+    return null;
+  }
+
+  public findEventRelevantLogs(
+    event: Event,
+    parsedLogs: EventLogType[],
+    eventIndex: number
+  ) {
+    const relevantLogs: EventLogType[] = [];
+
+    if (parsedLogs.length === 1) {
+      return relevantLogs;
+    }
+
+    for (let i = eventIndex - 1; i >= 0; i--) {
+      const parsedEvtLog = parsedLogs[i];
+
+      switch (parsedEvtLog.type) {
+        case LogType.ERC1155:
+        case LogType.ERC721:
+        case LogType.ERC20:
+          relevantLogs.unshift(parsedEvtLog);
+          break;
+        case Marketplace.Opensea:
+        default:
+          return relevantLogs;
+      }
+    }
+
+    return relevantLogs;
   }
 }

@@ -11,20 +11,11 @@ import { OpenSea as OpenSeaMarketConfig } from "../markets";
 import { OpenSeaProvider } from "../markets/OpenSeaProvider";
 import { BigNumber, ethers } from "ethers";
 import { ChainEvents } from "../markets/BaseMarketOnChainProvider";
+import { getLogger } from "../utils/logger";
 
-const ERC721ContractInterface = new ethers.utils.Interface([
-  "event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId)",
-  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
-  "event ApprovalForAll(address indexed owner, address indexed operator, bool approved)",
-  "event OwnershipTransferred(address indexed previousOwner, address indexed newOwner)",
-]);
-
-const ERC1155ContractInterface = new ethers.utils.Interface([
-  "event TransferSingle(address indexed operator, address indexed from, address indexed to, uint256 id, uint256 value)",
-  "event TransferBatch(address indexed operator, address indexed from, address indexed to, uint256[] ids, uint256[] values)",
-  "event ApprovalForAll(address indexed account, address indexed operator, bool approved)",
-  "event URI(string value, uint256 indexed id)"
-]);
+const LOGGER = getLogger("OPENSEA_ADAPTER", {
+  datadog: !!process.env.DATADOG_API_KEY,
+});
 
 const OSProvider = new OpenSeaProvider(OpenSeaMarketConfig);
 
@@ -32,7 +23,7 @@ async function runCollections(): Promise<void> {
   const collections = await Contract.getAll(Blockchain.Ethereum);
 
   if (collections.length === 0) {
-    console.log("No OpenSea collections to request...");
+    LOGGER.info("No OpenSea collections to request...");
     return;
   }
 
@@ -40,11 +31,11 @@ async function runCollections(): Promise<void> {
     COINGECKO_IDS[Blockchain.Ethereum].geckoId
   );
 
-  console.log("Fetching metadata for Opensea collections:", collections.length);
+  LOGGER.info("Fetching metadata for Opensea collections:", collections.length);
 
   for (const collection of collections) {
     try {
-      console.log(
+      LOGGER.info(
         "Fetching metadata for Opensea collection:",
         collection?.name || "No name"
       );
@@ -73,7 +64,7 @@ async function runSales(): Promise<void> {
     return m;
   }, {});
 
-  console.log("Fetching sales for OpenSea collections:", collections.length);
+  LOGGER.info("Fetching sales for OpenSea collections:", collections.length);
 
   const itSales = OSProvider.fetchSales();
   // eslint-disable-next-line prefer-const
@@ -82,84 +73,52 @@ async function runSales(): Promise<void> {
   while (!(await nextSales).done) {
     const { chain, events, blockRange, receipts } = (await nextSales)
       .value as ChainEvents;
-    console.log(`Got ${events.length} sales`);
+    LOGGER.info(`Got ${events.length} sales`);
     for (let i = 0; i < events.length; i++) {
       const event = events[i];
-      const { meta, receipt } = receipts[event.transactionHash];
-      if (!meta) {
-        console.log(`Skipping ${receipt.transactionHash}`);
+      const { meta: metas, receipt } = receipts[event.transactionHash];
+      if (!metas.length) {
+        LOGGER.info(`Skipping ${receipt.transactionHash}`);
         continue;
       }
-      const { contractAddress, price, eventSignatures } = meta;
-      const formattedPrice = ethers.utils.formatUnits(price, "ether");
-      console.log(
-        `Sale of ${contractAddress} from ${
-          receipt.transactionHash
-        } for ${formattedPrice} ${chain}\n\t${eventSignatures.join("\n\t")}\n`
-      );
-      if (!contractAddress) continue;
-      Sale.insert({
-        slug: collectionMap[contractAddress]?.slug ?? contractAddress,
-        marketplace: Marketplace.Opensea,
-        sales: [
-          {
-            txnHash: receipt.transactionHash,
-            timestamp: receipt.blockNumber.toString(),
-            paymentTokenAddress: null,
-            contractAddress,
-            price: parseFloat(formattedPrice),
-            priceBase: null,
-            priceUSD: null,
-            sellerAddress: meta.taker,
-            buyerAddress: meta.maker,
-            marketplace: Marketplace.Opensea,
-            chain,
-          },
-        ]
-      })
+      for (const meta of metas) {
+        const { contractAddress, price, eventSignatures } = meta;
+        const formattedPrice = ethers.utils.formatUnits(price, "ether");
+        LOGGER.info(
+          `Sale of ${contractAddress} from ${
+            receipt.transactionHash
+          } for ${formattedPrice} ${chain}\n\t${eventSignatures.join("\n\t")}\n`,
+          meta
+        );
+        if (!contractAddress) continue;
+        Sale.insert({
+          slug: collectionMap[contractAddress]?.slug ?? contractAddress,
+          marketplace: Marketplace.Opensea,
+          sales: [
+            {
+              txnHash: receipt.transactionHash,
+              timestamp: receipt.blockNumber.toString(),
+              paymentTokenAddress: null,
+              contractAddress,
+              price: parseFloat(formattedPrice),
+              priceBase: null,
+              priceUSD: null,
+              sellerAddress: meta.seller,
+              buyerAddress: meta.buyer,
+              marketplace: Marketplace.Opensea,
+              chain,
+            },
+          ],
+        });
+      }
     }
-    // AdapterState.updateSalesLastSyncedBlockNumber(
-    //   Marketplace.Opensea,
-    //   blockRange.endBlock,
-    //   chain
-    // );
+    AdapterState.updateSalesLastSyncedBlockNumber(
+      Marketplace.Opensea,
+      blockRange.endBlock,
+      chain
+    );
     nextSales = itSales.next();
   }
-
-  // const tx = await OSProvider.chains.ethereum.provider.getBlockWithTransactions(
-  //   12287507
-  // );
-
-  // console.log(
-  //   tx.transactions.find(
-  //     (t) =>
-  //       t.hash ===
-  //       "0x22199329b0aa1aa68902a78e3b32ca327c872fab166c7a2838273de6ad383eba"
-  //   )
-  // );
-
-  // const firstCollection = collections[1];
-  // const collectionContract = new ethers.Contract(
-  //   "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D",
-  //   ERC721ContractInterface,
-  //   OSProvider.chains.ethereum.provider
-  // );
-  // const events = await collectionContract.queryFilter(
-  //   {
-  //     address: "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D",
-  //     topics: collectionContract.interface.encodeFilterTopics(
-  //       collectionContract.interface.getEvent("OwnershipTransferred"),
-  //       []
-  //     ),
-  //   },
-  //   12287507,
-  //   12287507
-  // );
-  // console.log(events);
-  // for (const collection of collections) {
-  //   console.log("Fetching sales for OpenSea collection:", collection.name);
-  //   await fetchSales(collection);
-  // }
 }
 
 async function fetchCollection(

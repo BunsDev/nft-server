@@ -8,30 +8,37 @@ import { BigNumber, Contract, ethers } from "ethers";
 import { MarketConfig, MarketChainsConfig } from "../markets";
 import { Interface, LogDescription } from "@ethersproject/abi";
 import { TransactionReceipt, Provider } from "@ethersproject/abstract-provider";
-import { EventFragment } from "ethers/lib/utils";
+import { EventFragment, Result } from "ethers/lib/utils";
 import { Event } from "ethers";
 
 export enum LogType {
   ERC721 = "erc721",
   ERC1155 = "erc1155",
   ERC20 = "erc20",
+  UNKNOWN = "unknown",
 }
 export type EventLogType = {
   log: LogDescription;
   type: LogType | Marketplace;
+  contract?: string;
+  decodedData?: Result;
+  topics?: Array<string>;
+  errors?: Array<Error>;
 };
 export type EventMetadata = {
   contractAddress: string;
-  taker: string;
-  maker: string;
+  buyer: string;
+  seller: string;
   price: BigNumber;
   eventSignatures: string[];
+  tokenID: string;
+  data: Result;
 };
 export type TxReceiptsWithMetadata = Record<
   string,
   {
     receipt: TransactionReceipt;
-    meta: EventMetadata;
+    meta: EventMetadata[];
   }
 >;
 export type ChainEvents = {

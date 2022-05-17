@@ -1,28 +1,38 @@
-import winston from "winston";
+import winston, { Logger } from "winston";
 
 type LogOptions = {
   console?: boolean;
   error?: boolean;
   info?: boolean;
   debug?: boolean;
+  datadog?: boolean;
   format?: winston.Logform.Format;
   levels?: winston.config.AbstractConfigSetLevels;
   transports?: winston.transport[];
-  path: string;
+  path?: string;
 };
 
-export function getLogger(name: string, options?: LogOptions): winston.Logger {
+type TLogger = {
+  [key: string]: (
+    message: string,
+    meta?: unknown,
+    ...winston: Array<unknown>
+  ) => void;
+};
+
+export function getLogger(name: string, options?: LogOptions): TLogger {
   const {
     console: _console = true,
     error = true,
     info = true,
     debug = true,
+    datadog = false,
     format = null,
     levels = null,
     transports = null,
     path = "./",
   } = options || {};
-  return winston.createLogger({
+  const _logger: Logger = winston.createLogger({
     levels: levels ?? winston.config.syslog.levels,
     format: format ?? winston.format.json(),
     transports:
@@ -44,6 +54,29 @@ export function getLogger(name: string, options?: LogOptions): winston.Logger {
             filename: `${path}${name}.debug.log`,
             level: "debug",
           }),
+        datadog &&
+          new winston.transports.Http({
+            host: `http-intake.logs.datadoghq.com`,
+            path: `/api/v2/logs?dd-api-key=${process.env.DATADOG_API_KEY}&ddsource=nodejs&service=defillama-${name}`,
+            ssl: true,
+          }),
       ].filter(Boolean),
   });
+
+  const LOGGER: TLogger = {};
+  const _levels = Object.keys(levels ?? winston.config.syslog.levels) as Array<
+    keyof typeof _logger
+  >;
+
+  for (const _level of _levels) {
+    LOGGER[_level as string] = function (
+      message: string,
+      meta?: unknown,
+      ...winston: Array<unknown>
+    ) {
+      _logger[_level]({ message, meta }, ...winston);
+    };
+  }
+
+  return LOGGER;
 }

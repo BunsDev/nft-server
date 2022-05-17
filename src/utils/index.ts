@@ -3,6 +3,11 @@ import web3 from "web3";
 import { Block } from "web3-eth";
 import { Log } from "web3-core";
 import { Blockchain, Marketplace, SaleData } from "../types";
+import { getLogger } from "./logger";
+
+const LOGGER = getLogger("ERROR_HANDLER", {
+  datadog: !!process.env.DATADOG_API_KEY,
+});
 
 export const sleep = async (seconds: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, seconds * 1000));
@@ -60,18 +65,24 @@ export function getPriceAtDate(
 export async function handleError(error: Error, context: string) {
   if (axios.isAxiosError(error)) {
     if (error.response?.status === 404) {
-      console.error(`Error [${context}] - not found: ${error.message}`);
+      LOGGER.error(`Error [${context}] - not found: ${error.message}`, error);
     }
     if (error.response?.status === 429) {
       // Backoff for 1 minute if rate limited
-      console.error(`Error [${context}] - too many requests: ${error.message}`);
+      LOGGER.error(
+        `Error [${context}] - too many requests: ${error.message}`,
+        error
+      );
       await sleep(60);
     }
     if (error.response?.status === 500 || error.response.status === 504) {
-      console.error(`Error [${context}] - server error: ${error.message}`);
+      LOGGER.error(
+        `Error [${context}] - server error: ${error.message}`,
+        error
+      );
     }
   }
-  console.error(`Error [${context}] - other error: ${error.message}`);
+  LOGGER.error(`Error [${context}] - other error: ${error.message}`, error);
 }
 
 export function filterObject(object: Object) {

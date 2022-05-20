@@ -28,6 +28,7 @@ import {
   IERC721Standard,
 } from "../constants";
 import { ParseErrors, UnparsableLogError } from "../utils/UnparsableLogError";
+import { MetricsReporter, MetricData } from "../utils/metrics";
 
 const LOGGER = getLogger("OPENSEA_PROVIDER", {
   datadog: !!process.env.DATADOG_API_KEY,
@@ -73,6 +74,9 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
   public events: SaleEvents;
   public config: MarketConfig;
 
+  private metrics: Record<string, MetricData>;
+  private __metricsInterval: NodeJS.Timer;
+
   constructor(config: MarketConfig) {
     const { chains, contracts, interfaces, topics }: MarketProviders =
       BaseMarketOnChainProviderFactory.createMarketProviders(config);
@@ -81,6 +85,43 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
     this.contracts = contracts;
     this.interfaces = interfaces;
     this.topics = topics;
+
+    this.initMetrics();
+  }
+
+  private initMetrics(force = false): void {
+    if (this.__metricsInterval) {
+      if (!force) return;
+      clearInterval(this.__metricsInterval);
+    }
+    this.metrics = {};
+    this.__metricsInterval = setInterval(() => this.reportMetrics(), 1e3);
+  }
+
+  private reportMetrics() {
+    for (const metric of Object.keys(this.metrics)) {
+      const value: number | MetricData = this.metrics[metric];
+      MetricsReporter.submit(
+        value.metric,
+        value.value,
+        value.type || "gauage",
+        value.time || null
+      );
+      this.setMetric(metric);
+    }
+  }
+
+  public setMetric(metric: string, value = 0) {
+    this.metrics[metric] = {
+      ...(metric in this.metrics ? this.metrics[metric] : {}),
+      metric,
+      value,
+    } as MetricData;
+  }
+
+  public incrMetric(metric: string, incr = 1) {
+    const value = metric in this.metrics ? this.metrics[metric].value : 0;
+    this.setMetric(metric, value + incr);
   }
 
   public async *fetchSales(): AsyncGenerator<ChainEvents> {
@@ -142,6 +183,7 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
         });
 
         try {
+          const queryFilterStart = performance.now();
           const events: Array<Event> = (
             await contract.queryFilter(
               {
@@ -152,6 +194,15 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
               toBlock
             )
           ).filter((e) => !e.removed);
+          const queryFilterEnd = performance.now();
+          MetricsReporter.submit(
+            `opensea.${chain}.contract_queryFilter.blockRange`,
+            toBlock - fromBlock
+          );
+          MetricsReporter.submit(
+            `opensea.${chain}.contract_queryFilter.latency`,
+            queryFilterEnd - queryFilterStart
+          );
 
           LOGGER.info(
             `Found ${events.length} events between ${fromBlock} to ${toBlock}`
@@ -188,7 +239,13 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
     const receipts: TxReceiptsWithMetadata = {};
     // return receipts;
     for (const event of events) {
+      const queryReceiptStart = performance.now();
       const receipt: TransactionReceipt = await event.getTransactionReceipt();
+      const queryReceiptEnd = performance.now();
+      MetricsReporter.submit(
+        `opensea.${chain}.event_queryTxReceipt.latency`,
+        queryReceiptEnd - queryReceiptStart
+      );
       if (!(event.transactionHash in receipts)) {
         receipts[event.transactionHash] = {
           receipt,
@@ -203,6 +260,9 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
           this.getEventMetadata(event, receipt, chain)
         );
       }
+      this.incrMetric(
+        `opensea.${chain}.event_txReceiptProcess.numEventsPerSecond`
+      );
     }
     return receipts;
   }
@@ -395,6 +455,7 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
       topics: log.topics,
       errors: [],
     };
+    const parseLogStart = performance.now();
     for (const lType of Object.keys(parsers) as LogType[] | Marketplace[]) {
       try {
         parsed.log = parsers[lType].parseLog(log);
@@ -425,6 +486,11 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
       parsed.type = LogType.UNKNOWN;
       parsed.errors.push(new UnparsableLogError(log, errors));
     }
+    const parseLogEnd = performance.now();
+    MetricsReporter.submit(
+      `opensea.${chain}.receipt_parseLog.latency`,
+      parseLogEnd - parseLogStart
+    );
 
     return parsed;
   }

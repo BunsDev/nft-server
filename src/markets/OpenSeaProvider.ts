@@ -74,7 +74,7 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
   public events: SaleEvents;
   public config: MarketConfig;
 
-  private metrics: Record<string, MetricData>;
+  private metrics: Map<number, Record<string, MetricData>>;
   private __metricsInterval: NodeJS.Timer;
 
   constructor(config: MarketConfig) {
@@ -94,34 +94,64 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
       if (!force) return;
       clearInterval(this.__metricsInterval);
     }
-    this.metrics = {};
-    this.__metricsInterval = setInterval(() => this.reportMetrics(), 1e3);
+    this.metrics = new Map();
+    this.__metricsInterval = setInterval(() => this.reportMetrics(), 1e4);
   }
 
   private reportMetrics() {
-    for (const metric of Object.keys(this.metrics)) {
-      const value: number | MetricData = this.metrics[metric];
-      MetricsReporter.submit(
-        value.metric,
-        value.value,
-        value.type || "gauage",
-        value.time || null
-      );
-      this.setMetric(metric);
+    for (const time of this.metrics.keys()) {
+      const metrics: Record<string, MetricData> = this.metrics.get(time);
+      for (const metric of Object.keys(metrics)) {
+        const value = metrics[metric];
+        MetricsReporter.submit(
+          value.metric,
+          value.value,
+          value.type || "gauge",
+          time || null
+        );
+        this.setMetric(metric);
+      }
+      this.metrics.delete(time);
     }
   }
 
   public setMetric(metric: string, value = 0) {
-    this.metrics[metric] = {
-      ...(metric in this.metrics ? this.metrics[metric] : {}),
-      metric,
-      value,
-    } as MetricData;
+    const time = Math.floor(Date.now() / 1000);
+    const timeHash = this.metrics.has(time) ? this.metrics.get(time) : {};
+    // ...(metric in this.metrics ? this.metrics[metric] : {}),
+    this.metrics.set(time, {
+      ...timeHash,
+      [metric]: { metric, value } as MetricData,
+    } as Record<string, MetricData>);
+  }
+
+  public ensureMetric(time: number, metric: string, initialValue = 0) {
+    let timeHash = this.metrics.get(time);
+    if (!timeHash) {
+      timeHash = {};
+    }
+    if (!(metric in timeHash)) {
+      timeHash[metric] = { metric, value: initialValue };
+    }
+    this.metrics.set(time, timeHash);
   }
 
   public incrMetric(metric: string, incr = 1) {
-    const value = metric in this.metrics ? this.metrics[metric].value : 0;
+    const time = Math.floor(Date.now() / 1000);
+    this.ensureMetric(time, metric);
+    const value = this.metrics.has(time)
+      ? this.metrics.get(time)[metric].value
+      : 0;
     this.setMetric(metric, value + incr);
+  }
+
+  public decrMetric(metric: string, decr = 1) {
+    const time = Math.floor(Date.now() / 1000);
+    this.ensureMetric(time, metric);
+    const value = this.metrics.has(time)
+      ? this.metrics.get(time)[metric].value
+      : 0;
+    this.setMetric(metric, value - decr);
   }
 
   public async *fetchSales(): AsyncGenerator<ChainEvents> {
@@ -164,7 +194,9 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
         return;
       }
 
-      // eslint-disable-next-line no-unreachable-loop
+      let retryCount = 0;
+      let retryQuery = false;
+
       for (
         let i = 0;
         i < lastMatureBlock - lastSyncedBlockNumber;
@@ -181,6 +213,15 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
           toBlock,
           range: toBlock - fromBlock,
         });
+
+        if (retryQuery) {
+          LOGGER.info(`Retrying query`, {
+            fromBlock,
+            toBlock,
+            range: toBlock - fromBlock,
+            retryCount,
+          });
+        }
 
         try {
           const queryFilterStart = performance.now();
@@ -219,7 +260,16 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
               receipts: await this.getEventReceipts(events, chain),
             };
           }
+
+          retryCount = 0;
+          retryQuery = false;
         } catch (e) {
+          if (retryCount < 3) {
+            // try again
+            retryCount++;
+            i -= i - (BLOCK_RANGE + 1) < 0 ? i : BLOCK_RANGE + 1;
+            retryQuery = true;
+          }
           LOGGER.error(`Query error`, {
             error: e.message,
             reason: e.reason,
@@ -228,7 +278,6 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
           });
         }
       }
-      break;
     }
   }
 
@@ -240,6 +289,9 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
     // return receipts;
     for (const event of events) {
       const queryReceiptStart = performance.now();
+      this.incrMetric(
+        `opensea.${chain}.event_txReceiptProcess.numReceiptsPerSecond`
+      );
       const receipt: TransactionReceipt = await event.getTransactionReceipt();
       const queryReceiptEnd = performance.now();
       MetricsReporter.submit(

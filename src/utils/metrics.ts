@@ -14,35 +14,61 @@ export interface MetricData {
   type?: string;
 }
 
-export class MetricsReporter {
-  public static submit(
-    metric: string,
-    value: number,
-    type = "gauge",
-    time: number = null
-  ): Promise<v1.IntakePayloadAccepted> {
-    const res = apiInstance.submitMetrics({
-      body: {
-        series: [
-          {
-            metric: `defillama.${metric}`,
-            type,
-            points: [[time ?? new Date().getTime() / 1000, value]],
-          },
-        ],
-      },
-    } as v1.MetricsApiSubmitMetricsRequest);
+export function customMetricsReporter(
+  prefix: string,
+  suffix = "",
+  reporterTags: Array<string> = []
+) {
+  class DefaultMetricsReporter {
+    static metricPrefix: string = null;
+    static metricSuffix: string = null;
 
-    res.catch((error: unknown) =>
-      LOGGER.error("Failed to submit metric", {
-        metric,
-        value,
-        type,
-        time,
-        error,
-      })
-    );
+    public static submit(
+      metric: string,
+      value: number,
+      type = "gauge",
+      time: number = null,
+      tags: Array<string> = []
+    ): Promise<v1.IntakePayloadAccepted> {
+      const res = apiInstance.submitMetrics({
+        body: {
+          series: [
+            {
+              metric: `defillama.${self().metricPrefix}${metric}${
+                self().metricSuffix
+              }`,
+              type,
+              points: [[time ?? new Date().getTime() / 1000, value]],
+              tags: [...reporterTags, ...tags],
+            },
+          ],
+        },
+      } as v1.MetricsApiSubmitMetricsRequest);
 
-    return res;
+      res.catch((error: unknown) =>
+        LOGGER.error("Failed to submit metric", {
+          metric,
+          value,
+          type,
+          time,
+          error,
+        })
+      );
+
+      return res;
+    }
   }
+
+  const Reporter = class extends DefaultMetricsReporter {
+    static metricPrefix: string = prefix;
+    static metricSuffix: string = suffix;
+  };
+
+  function self() {
+    return Reporter;
+  }
+
+  return self();
 }
+
+export const MetricsReporter = customMetricsReporter("", "");

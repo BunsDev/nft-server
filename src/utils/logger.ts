@@ -12,7 +12,7 @@ type LogOptions = {
   path?: string;
 };
 
-type TLogger = {
+export type TLogger = {
   [key: string]: (
     message: string,
     meta?: unknown,

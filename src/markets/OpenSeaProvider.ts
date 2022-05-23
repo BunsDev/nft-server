@@ -28,7 +28,16 @@ import {
   IERC721Standard,
 } from "../constants";
 import { ParseErrors, UnparsableLogError } from "../utils/UnparsableLogError";
-import { MetricsReporter, MetricData } from "../utils/metrics";
+import {
+  MetricsReporter as DefaultMetricsReporter,
+  MetricData,
+  customMetricsReporter,
+} from "../utils/metrics";
+import {
+  ClusterManager,
+  ClusterWorker,
+  IClusterProvider,
+} from "../utils/cluster";
 
 const LOGGER = getLogger("OPENSEA_PROVIDER", {
   datadog: !!process.env.DATADOG_API_KEY,
@@ -36,6 +45,8 @@ const LOGGER = getLogger("OPENSEA_PROVIDER", {
 
 const MATURE_BLOCK_AGE = 250;
 const BLOCK_RANGE = 250;
+
+let MetricsReporter = DefaultMetricsReporter;
 
 /**
  * OS Market Chain Provider
@@ -54,7 +65,9 @@ const BLOCK_RANGE = 250;
  * general outline of OS for example.
  */
 
-export class OpenSeaProvider implements IMarketOnChainProvider {
+export class OpenSeaProvider
+  implements IMarketOnChainProvider, IClusterProvider
+{
   public static ERC721ContractInterface = new ethers.utils.Interface(
     IERC721Standard
   );
@@ -76,6 +89,8 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
 
   private metrics: Map<number, Record<string, MetricData>>;
   private __metricsInterval: NodeJS.Timer;
+  private cluster: ClusterManager;
+  private worker: ClusterWorker;
 
   constructor(config: MarketConfig) {
     const { chains, contracts, interfaces, topics }: MarketProviders =
@@ -87,6 +102,28 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
     this.topics = topics;
 
     this.initMetrics();
+  }
+
+  public withCluster(kluster: ClusterManager): void {
+    this.cluster = kluster;
+    this.cluster.start().sendPing();
+  }
+
+  public withWorker(worker: ClusterWorker): void {
+    this.worker = worker;
+    MetricsReporter = customMetricsReporter("", "", [`worker:${worker.uuid}`]);
+  }
+
+  public async dispatchWorkMethod(
+    method: string,
+    args: unknown[]
+  ): Promise<unknown> {
+    switch (method) {
+      case "getEventReceipts": {
+        // eslint-disable-next-line prefer-spread
+        return this.getEventReceipts.apply(this, args);
+      }
+    }
   }
 
   private initMetrics(force = false): void {
@@ -118,7 +155,6 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
   public setMetric(metric: string, value = 0) {
     const time = Math.floor(Date.now() / 1000);
     const timeHash = this.metrics.has(time) ? this.metrics.get(time) : {};
-    // ...(metric in this.metrics ? this.metrics[metric] : {}),
     this.metrics.set(time, {
       ...timeHash,
       [metric]: { metric, value } as MetricData,
@@ -250,6 +286,26 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
           );
 
           if (events.length) {
+            const receipts = (
+              (await this.cluster.parallelizeMethod(
+                "getEventReceipts",
+                events,
+                chain
+              )) as unknown as Array<TxReceiptsWithMetadata>
+            ).reduce((m, receipts) => {
+              for (const txHash of Object.keys(receipts)) {
+                if (txHash in m) {
+                  m[txHash].meta = [
+                    ...m[txHash].meta,
+                    ...receipts[txHash].meta,
+                  ];
+                } else {
+                  m[txHash] = receipts[txHash];
+                }
+              }
+              return m;
+            }, {} as TxReceiptsWithMetadata);
+
             yield {
               chain,
               events,
@@ -257,7 +313,16 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
                 startBlock: fromBlock,
                 endBlock: toBlock,
               },
-              receipts: await this.getEventReceipts(events, chain),
+              receipts,
+            };
+          } else {
+            yield {
+              chain,
+              events,
+              blockRange: {
+                startBlock: fromBlock,
+                endBlock: toBlock,
+              },
             };
           }
 
@@ -275,6 +340,7 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
             reason: e.reason,
             fromBlock,
             toBlock,
+            stack: e.stack,
           });
         }
       }
@@ -288,6 +354,13 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
     const receipts: TxReceiptsWithMetadata = {};
     // return receipts;
     for (const event of events) {
+      if (
+        !("getTransactionReceipt" in event) ||
+        !(typeof event.getTransactionReceipt === "function")
+      ) {
+        this.restoreEventWrap(event, chain);
+      }
+
       const queryReceiptStart = performance.now();
       this.incrMetric(
         `opensea.${chain}.event_txReceiptProcess.numReceiptsPerSecond`
@@ -317,6 +390,14 @@ export class OpenSeaProvider implements IMarketOnChainProvider {
       );
     }
     return receipts;
+  }
+
+  public restoreEventWrap(event: Event, chain: Blockchain) {
+    event.getTransactionReceipt = async (): Promise<TransactionReceipt> => {
+      return await this.chains[chain].provider.getTransactionReceipt(
+        event.transactionHash
+      );
+    };
   }
 
   public getEventMetadata(

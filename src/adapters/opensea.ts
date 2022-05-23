@@ -12,12 +12,20 @@ import { OpenSeaProvider } from "../markets/OpenSeaProvider";
 import { BigNumber, ethers } from "ethers";
 import { ChainEvents } from "../markets/BaseMarketOnChainProvider";
 import { getLogger } from "../utils/logger";
+import { ClusterManager, ClusterWorker } from "../utils/cluster";
+import cluster from "cluster";
 
 const LOGGER = getLogger("OPENSEA_ADAPTER", {
   datadog: !!process.env.DATADOG_API_KEY,
 });
 
 const OSProvider = new OpenSeaProvider(OpenSeaMarketConfig);
+
+if (cluster.isWorker) {
+  ClusterWorker.create(process.env.WORKER_UUID, "OPENSEA", OSProvider);
+} else {
+  ClusterManager.create("OPENSEA", OSProvider);
+}
 
 async function runCollections(): Promise<void> {
   const collections = await Contract.getAll(Blockchain.Ethereum);
@@ -219,6 +227,8 @@ async function run(): Promise<void> {
 
 const OpenseaAdapter: DataAdapter = { run };
 
-OpenseaAdapter.run();
+if (cluster.isPrimary) {
+  OpenseaAdapter.run();
+}
 
 export default OpenseaAdapter;

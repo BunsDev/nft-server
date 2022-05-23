@@ -1,6 +1,4 @@
-import { Provider } from "@ethersproject/providers";
 import { OwnableStandard } from "./constants";
-import { IOnChainProvider } from "./interfaces";
 import { Blockchain, Marketplace, HumanABI } from "./types";
 
 export type MarketChainConfig = {
@@ -11,26 +9,11 @@ export type MarketChainConfig = {
   deployBlock?: number;
 };
 
-interface ChainConfig<T> {
-  config: MarketChainConfig;
-  get(): MarketChainConfig;
-}
-
 export type MarketChainsConfig = Partial<Record<Blockchain, MarketChainConfig>>;
 
 export type MarketConfig = {
   chains: MarketChainsConfig;
 };
-
-function createChainConfig<T>(config: MarketChainConfig): ChainConfig<T> {
-  return new (class implements ChainConfig<T> {
-    // eslint-disable-next-line no-useless-constructor
-    constructor(public config: MarketChainConfig) {}
-    get(): MarketChainConfig {
-      return this.config;
-    }
-  })(config);
-}
 
 const markets: Partial<Record<Marketplace, MarketConfig>> = {
   [Marketplace.Opensea]: {

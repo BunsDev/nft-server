@@ -366,6 +366,14 @@ export class ClusterManager implements IClusterManager {
     }
   }
 
+  private flushWork(workerUuid: string): void {
+    const allWork = this.work.get(workerUuid);
+    this.work.set(
+      workerUuid,
+      allWork.filter((w) => w.__state !== WorkState.DONE)
+    );
+  }
+
   private handleWorkerMessage(
     { __state: workerState, method, work: workUpdate }: WorkerMessage,
     workerUuid: string
@@ -395,6 +403,7 @@ export class ClusterManager implements IClusterManager {
             uuid: workUpdate.uuid,
           });
           deferred.resolve(workUpdate.result);
+          this.flushWork(workerUuid);
         }
       }
     }
@@ -455,40 +464,44 @@ export class ClusterWorker implements IClusterWorker {
   }
 
   private async handleMessage({ uuid, method, data }: WorkerWork) {
-    if (method === "PING") {
-      this.LOGGER.info(`Worker PING`, { method, data });
-      this.sendPong();
-    } else {
-      try {
-        this.__state = WorkerState.BUSY;
-        this.sendMessage({
-          __state: WorkerState.BUSY,
-          uuid: this.uuid,
-          method: WorkerMessageMethod.UPDATE_STATE,
-          work: {
-            __state: WorkState.SUBMITTED,
-            uuid,
-          },
-        });
-        const dispatchResult = await this.provider.dispatchWorkMethod(
-          method,
-          data as Array<unknown>
-        );
+    switch (method) {
+      case "PING": {
+        this.LOGGER.info(`Worker PING`, { method, data });
+        this.sendPong();
+        break;
+      }
+      default: {
+        try {
+          this.__state = WorkerState.BUSY;
+          this.sendMessage({
+            __state: WorkerState.BUSY,
+            uuid: this.uuid,
+            method: WorkerMessageMethod.UPDATE_STATE,
+            work: {
+              __state: WorkState.SUBMITTED,
+              uuid,
+            },
+          });
+          const dispatchResult = await this.provider.dispatchWorkMethod(
+            method,
+            data as Array<unknown>
+          );
 
-        this.LOGGER.warning(`Dispacth result`, { method });
+          this.LOGGER.warning(`Dispacth result`, { method });
 
-        this.sendMessage({
-          __state: WorkerState.AVAILABLE,
-          uuid: this.uuid,
-          method: WorkerMessageMethod.UPDATE_STATE,
-          work: {
-            __state: WorkState.DONE,
-            uuid,
-            result: dispatchResult,
-          },
-        });
-      } catch (e) {
-        this.LOGGER.error(`Worker Error`, { e, uuid, method });
+          this.sendMessage({
+            __state: WorkerState.AVAILABLE,
+            uuid: this.uuid,
+            method: WorkerMessageMethod.UPDATE_STATE,
+            work: {
+              __state: WorkState.DONE,
+              uuid,
+              result: dispatchResult,
+            },
+          });
+        } catch (e) {
+          this.LOGGER.error(`Worker Error`, { e, uuid, method });
+        }
       }
     }
   }

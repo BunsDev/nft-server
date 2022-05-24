@@ -1,7 +1,5 @@
 import { ethers, BigNumber, Event } from "ethers";
-import { Interface, LogDescription } from "@ethersproject/abi/lib/interface";
-// import OPENSEA_ABI from "./opensea.abi.json";
-// import { EventFragment } from "ethers/lib/utils";
+import { Interface } from "@ethersproject/abi/lib/interface";
 import { getLogger } from "../utils/logger";
 import { IMarketOnChainProvider } from "../interfaces";
 import {
@@ -45,6 +43,8 @@ const LOGGER = getLogger("OPENSEA_PROVIDER", {
 
 const MATURE_BLOCK_AGE = 250;
 const BLOCK_RANGE = 250;
+const EVENT_RECEIPT_PARALLELISM: number =
+  parseInt(process.env.EVENT_RECEIPT_PARALLELISM) || 2;
 
 let MetricsReporter = DefaultMetricsReporter;
 
@@ -294,15 +294,12 @@ export class OpenSeaProvider
             LOGGER.warning(`EventReceiptResult`, { result });
             const receipts =
               result &&
-              result.reduce((m, receipts) => {
-                for (const txHash of Object.keys(receipts)) {
+              result.reduce((m, r) => {
+                for (const txHash of Object.keys(r)) {
                   if (txHash in m) {
-                    m[txHash].meta = [
-                      ...m[txHash].meta,
-                      ...receipts[txHash].meta,
-                    ];
+                    m[txHash].meta = [...m[txHash].meta, ...r[txHash].meta];
                   } else {
-                    m[txHash] = receipts[txHash];
+                    m[txHash] = r[txHash];
                   }
                 }
                 return m;
@@ -357,37 +354,69 @@ export class OpenSeaProvider
     chain: Blockchain
   ): Promise<TxReceiptsWithMetadata> {
     const receipts: TxReceiptsWithMetadata = {};
-    for (const event of events) {
-      const queryReceiptStart = performance.now();
+    const queryReceiptStart = performance.now();
+    for (let i = 0; i < events.length; i += EVENT_RECEIPT_PARALLELISM) {
+      const eventsSlice = events.slice(i, i + EVENT_RECEIPT_PARALLELISM);
+      const promises: Array<Promise<TransactionReceipt>> = [];
+      const expectedReceiptCount: Record<string, number> = {};
+      const promiseMap: Record<string, number> = {};
+
       this.incrMetric(
-        `opensea.${chain}.event_txReceiptProcess.numReceiptsPerSecond`
+        `opensea.${chain}.event_txReceiptProcess.numReceiptsPerSecond`,
+        eventsSlice.length
       );
-      const receipt: TransactionReceipt = await this.getEventReceipt(
-        event,
-        chain
-      );
+
+      for (const event of eventsSlice) {
+        if (!(event.transactionHash in expectedReceiptCount)) {
+          expectedReceiptCount[event.transactionHash] = 0;
+        }
+        expectedReceiptCount[event.transactionHash]++;
+        if (!(event.transactionHash in promiseMap)) {
+          promiseMap[event.transactionHash] =
+            promises.push(this.getEventReceipt(event, chain)) - 1;
+        }
+      }
+
+      const txReceipts = await Promise.all(promises);
+
       const queryReceiptEnd = performance.now();
+      const queryTime = queryReceiptEnd - queryReceiptStart;
       MetricsReporter.submit(
         `opensea.${chain}.event_queryTxReceipt.latency`,
-        queryReceiptEnd - queryReceiptStart
+        queryTime / eventsSlice.length
       );
-      if (!(event.transactionHash in receipts)) {
-        receipts[event.transactionHash] = {
-          receipt,
-          meta: [this.getEventMetadata(event, receipt, chain)],
-        };
-      } else {
-        LOGGER.debug(`Multi-sale TX`, {
-          event,
-          receipt,
-        });
-        receipts[event.transactionHash].meta.push(
-          this.getEventMetadata(event, receipt, chain)
+
+      if (txReceipts.length !== eventsSlice.length) {
+        LOGGER.warning(
+          `Receipt to event ratio unbalanced, possible multi-sale`,
+          {
+            eventsSlice,
+            txReceipts,
+          }
         );
       }
-      this.incrMetric(
-        `opensea.${chain}.event_txReceiptProcess.numEventsPerSecond`
-      );
+
+      for (let j = 0; j < eventsSlice.length; j++) {
+        const event = eventsSlice[j];
+        const receipt = txReceipts[promiseMap[event.transactionHash]];
+        if (!(receipt.transactionHash in receipts)) {
+          receipts[receipt.transactionHash] = {
+            receipt,
+            meta: [this.getEventMetadata(event, receipt, chain)],
+          };
+        } else {
+          LOGGER.debug(`Multi-sale TX`, {
+            event,
+            receipt,
+          });
+          receipts[event.transactionHash].meta.push(
+            this.getEventMetadata(event, receipt, chain)
+          );
+        }
+        this.incrMetric(
+          `opensea.${chain}.event_txReceiptProcess.numEventsPerSecond`
+        );
+      }
     }
     return receipts;
   }

@@ -41,10 +41,15 @@ const LOGGER = getLogger("OPENSEA_PROVIDER", {
   datadog: !!process.env.DATADOG_API_KEY,
 });
 
-const MATURE_BLOCK_AGE = 250;
-const BLOCK_RANGE = 250;
-const EVENT_RECEIPT_PARALLELISM: number =
-  parseInt(process.env.EVENT_RECEIPT_PARALLELISM) || 2;
+const MATURE_BLOCK_AGE = process.env.MATURE_BLOCK_AGE
+  ? parseInt(process.env.MATURE_BLOCK_AGE)
+  : 250;
+const BLOCK_RANGE = process.env.EVENT_BLOCK_RANGE
+  ? parseInt(process.env.EVENT_BLOCK_RANGE)
+  : 250;
+const EVENT_RECEIPT_PARALLELISM: number = process.env.EVENT_RECEIPT_PARALLELISM
+  ? parseInt(process.env.EVENT_RECEIPT_PARALLELISM)
+  : 2;
 
 let MetricsReporter = DefaultMetricsReporter;
 
@@ -251,7 +256,7 @@ export class OpenSeaProvider
         });
 
         if (retryQuery) {
-          LOGGER.warning(`Retrying query`, {
+          LOGGER.warn(`Retrying query`, {
             fromBlock,
             toBlock,
             range: toBlock - fromBlock,
@@ -291,7 +296,7 @@ export class OpenSeaProvider
                 Event,
                 TxReceiptsWithMetadata
               >("getEventReceipts", events, chain);
-            LOGGER.warning(`EventReceiptResult`, { result });
+            LOGGER.warn(`EventReceiptResult`, { result });
             const receipts =
               result &&
               result.reduce((m, r) => {
@@ -355,8 +360,14 @@ export class OpenSeaProvider
   ): Promise<TxReceiptsWithMetadata> {
     const receipts: TxReceiptsWithMetadata = {};
     const queryReceiptStart = performance.now();
-    for (let i = 0; i < events.length; i += EVENT_RECEIPT_PARALLELISM) {
+    const loopEnd =
+      events.length +
+      Math.abs(
+        EVENT_RECEIPT_PARALLELISM - (events.length % EVENT_RECEIPT_PARALLELISM)
+      );
+    for (let i = 0; i <= loopEnd; i += EVENT_RECEIPT_PARALLELISM) {
       const eventsSlice = events.slice(i, i + EVENT_RECEIPT_PARALLELISM);
+      if (!eventsSlice.length) break;
       const promises: Array<Promise<TransactionReceipt>> = [];
       const expectedReceiptCount: Record<string, number> = {};
       const promiseMap: Record<string, number> = {};
@@ -387,13 +398,10 @@ export class OpenSeaProvider
       );
 
       if (txReceipts.length !== eventsSlice.length) {
-        LOGGER.warning(
-          `Receipt to event ratio unbalanced, possible multi-sale`,
-          {
-            eventsSlice,
-            txReceipts,
-          }
-        );
+        LOGGER.warn(`Receipt to event ratio unbalanced, possible multi-sale`, {
+          eventsSlice: eventsSlice.length,
+          txReceipts: txReceipts.length,
+        });
       }
 
       for (let j = 0; j < eventsSlice.length; j++) {
@@ -564,7 +572,7 @@ export class OpenSeaProvider
           return eventMetadata;
         } else if (ERC1155TransferBatch) {
           // TODO
-          LOGGER.alert(`TODO: ERC1155TransferBatch`, {
+          LOGGER.warn(`TODO: ERC1155TransferBatch`, {
             ...eventMetadata,
             tx: receipt.transactionHash,
           });
@@ -594,7 +602,7 @@ export class OpenSeaProvider
     event: Event,
     receipt: TransactionReceipt
   ) {
-    LOGGER.warning(`Event is NON_STANDARD`, { eventIndex, event, receipt });
+    LOGGER.warn(`Event is NON_STANDARD`, { eventIndex, event, receipt });
   }
 
   public getERC20Price(logs: EventLogType[]): BigNumber {

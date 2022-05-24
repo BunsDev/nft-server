@@ -33,7 +33,7 @@ export function getLogger(name: string, options?: LogOptions): TLogger {
     path = "./",
   } = options || {};
   const _logger: Logger = winston.createLogger({
-    levels: levels ?? winston.config.syslog.levels,
+    levels: levels ?? winston.config.npm.levels,
     format: format ?? winston.format.json(),
     transports:
       transports ??
@@ -64,7 +64,7 @@ export function getLogger(name: string, options?: LogOptions): TLogger {
   });
 
   const LOGGER: TLogger = {};
-  const _levels = Object.keys(levels ?? winston.config.syslog.levels) as Array<
+  const _levels = Object.keys(levels ?? winston.config.npm.levels) as Array<
     keyof typeof _logger
   >;
 
@@ -74,7 +74,8 @@ export function getLogger(name: string, options?: LogOptions): TLogger {
       meta?: unknown,
       ...winston: Array<unknown>
     ) {
-      _logger[_level]({ message, meta }, ...winston);
+      const timestamp = Date.now();
+      _logger[_level]({ timestamp, message, meta }, ...winston);
     };
   }
 

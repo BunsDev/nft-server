@@ -87,7 +87,7 @@ async function runSales(): Promise<void> {
       const event = events[i];
 
       if (!(event.transactionHash in receipts)) {
-        LOGGER.warning(`Missing receipt`, {
+        LOGGER.warn(`Missing receipt`, {
           event,
           blockRange,
         });

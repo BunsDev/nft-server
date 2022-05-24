@@ -161,7 +161,7 @@ export class ClusterManager implements IClusterManager {
       }
     }
     if (count < MAX_FORK_LEN) {
-      this.LOGGER.warning(`Unexpected worker count`, { count, states });
+      this.LOGGER.warn(`Unexpected worker count`, { count, states });
     }
     return count;
   }
@@ -397,7 +397,7 @@ export class ClusterManager implements IClusterManager {
         const deferred = work.deferred;
         this.updateWorkState(workerUuid, work.uuid, workUpdate.__state);
         if (workUpdate.__state === WorkState.DONE) {
-          this.LOGGER.warning(`Work State DONE`, {
+          this.LOGGER.warn(`Work State DONE`, {
             method,
             workerUuid,
             uuid: workUpdate.uuid,
@@ -487,7 +487,7 @@ export class ClusterWorker implements IClusterWorker {
             data as Array<unknown>
           );
 
-          this.LOGGER.warning(`Dispacth result`, { method });
+          this.LOGGER.warn(`Dispacth result`, { method });
 
           this.sendMessage({
             __state: WorkerState.AVAILABLE,

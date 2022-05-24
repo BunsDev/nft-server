@@ -291,7 +291,7 @@ export class OpenSeaProvider
                 Event,
                 TxReceiptsWithMetadata
               >("getEventReceipts", events, chain);
-            LOGGER.alert(`EventReceiptResult`, { result });
+            LOGGER.warning(`EventReceiptResult`, { result });
             const receipts =
               result &&
               result.reduce((m, receipts) => {
@@ -344,7 +344,7 @@ export class OpenSeaProvider
             i -= i - (BLOCK_RANGE + 1) < 0 ? i : BLOCK_RANGE + 1;
             retryQuery = true;
           } else if (retryCount > 3) {
-            LOGGER.crit(`Not able to recover from query errors`);
+            LOGGER.error(`Not able to recover from query errors`);
             throw new Error(`Not able to recover from query errors`);
           }
         }
@@ -408,7 +408,7 @@ export class OpenSeaProvider
       return await event.getTransactionReceipt();
     } catch (e) {
       if (retryCount > 3) {
-        LOGGER.crit(`Failed to get event receipt`, {
+        LOGGER.error(`Failed to get event receipt`, {
           error: e,
           event,
         });

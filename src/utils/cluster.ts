@@ -389,7 +389,7 @@ export class ClusterManager implements IClusterManager {
         const deferred = work.deferred;
         this.updateWorkState(workerUuid, work.uuid, workUpdate.__state);
         if (workUpdate.__state === WorkState.DONE) {
-          this.LOGGER.alert(`Work State DONE`, {
+          this.LOGGER.warning(`Work State DONE`, {
             method,
             workerUuid,
             uuid: workUpdate.uuid,
@@ -475,7 +475,7 @@ export class ClusterWorker implements IClusterWorker {
           data as Array<unknown>
         );
 
-        this.LOGGER.alert(`Dispacth result`, { method });
+        this.LOGGER.warning(`Dispacth result`, { method });
 
         this.sendMessage({
           __state: WorkerState.AVAILABLE,

@@ -12,8 +12,8 @@ WORKDIR /app
 
 COPY --from=build /build/dist/ /app/
 
-COPY --from=build /build/package.json /app/
+COPY --from=build /build/package*.json /app/
 
 RUN npm install --omit dev
 
-RUN npm run start 
+CMD [ "npm", "run", "start-docker" ]

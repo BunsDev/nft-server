@@ -113,3 +113,8 @@ export type HumanABI = string[];
 export type ERCStandard = {
   abi: HumanABI;
 };
+
+export type SerializedBigNumber = {
+  hex?: string;
+  type: string;
+};

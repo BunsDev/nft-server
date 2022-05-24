@@ -1,3 +1,4 @@
+import "../utils/tracer";
 import axios from "axios";
 import { DataAdapter } from ".";
 import { Collection, Contract, Sale, HistoricalStatistics, AdapterState } from "../models";
@@ -5,7 +6,7 @@ import { Opensea } from "../api/opensea";
 import { Coingecko } from "../api/coingecko";
 import { CurrencyConverter } from "../api/currency-converter";
 import { COINGECKO_IDS } from "../constants";
-import { sleep, handleError, filterObject } from "../utils";
+import { sleep, handleError, filterObject, restoreBigNumber } from "../utils";
 import { Blockchain, CollectionData, LowVolumeError, Marketplace } from "../types";
 import { OpenSea as OpenSeaMarketConfig } from "../markets";
 import { OpenSeaProvider } from "../markets/OpenSeaProvider";
@@ -84,6 +85,15 @@ async function runSales(): Promise<void> {
     LOGGER.info(`Got ${events.length} sales`);
     for (let i = 0; i < events.length; i++) {
       const event = events[i];
+
+      if (!(event.transactionHash in receipts)) {
+        LOGGER.alert(`Missing receipt`, {
+          event,
+          blockRange,
+        });
+        continue;
+      }
+
       const { meta: metas, receipt } = receipts[event.transactionHash];
       if (!metas.length) {
         LOGGER.info(`Skipping ${receipt.transactionHash}`);
@@ -91,8 +101,11 @@ async function runSales(): Promise<void> {
       }
       for (const meta of metas) {
         const { contractAddress, price, eventSignatures } = meta;
-        const formattedPrice = ethers.utils.formatUnits(price, "ether");
-        LOGGER.info(
+        const formattedPrice = ethers.utils.formatUnits(
+          restoreBigNumber(price),
+          "ether"
+        );
+        LOGGER.debug(
           `Sale of ${contractAddress} from ${
             receipt.transactionHash
           } for ${formattedPrice} ${chain}\n\t${eventSignatures.join("\n\t")}\n`,

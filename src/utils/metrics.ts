@@ -28,7 +28,8 @@ export function customMetricsReporter(
       value: number,
       type = "gauge",
       time: number = null,
-      tags: Array<string> = []
+      tags: Array<string> = [],
+      retryCount = 0
     ): Promise<v1.IntakePayloadAccepted> {
       const res = apiInstance.submitMetrics({
         body: {
@@ -45,15 +46,22 @@ export function customMetricsReporter(
         },
       } as v1.MetricsApiSubmitMetricsRequest);
 
-      res.catch((error: unknown) =>
-        LOGGER.error("Failed to submit metric", {
+      res.catch((error: unknown) => {
+        LOGGER.info("Failed to submit metric", {
           metric,
           value,
           type,
           time,
           error,
-        })
-      );
+        });
+        retryCount++;
+        if (retryCount < 3) {
+          setTimeout(
+            () => self().submit(metric, value, type, time, tags, retryCount),
+            0
+          );
+        }
+      });
 
       return res;
     }

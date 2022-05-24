@@ -251,7 +251,7 @@ export class OpenSeaProvider
         });
 
         if (retryQuery) {
-          LOGGER.info(`Retrying query`, {
+          LOGGER.warning(`Retrying query`, {
             fromBlock,
             toBlock,
             range: toBlock - fromBlock,
@@ -286,25 +286,27 @@ export class OpenSeaProvider
           );
 
           if (events.length) {
-            const receipts = (
-              (await this.cluster.parallelizeMethod(
-                "getEventReceipts",
-                events,
-                chain
-              )) as unknown as Array<TxReceiptsWithMetadata>
-            ).reduce((m, receipts) => {
-              for (const txHash of Object.keys(receipts)) {
-                if (txHash in m) {
-                  m[txHash].meta = [
-                    ...m[txHash].meta,
-                    ...receipts[txHash].meta,
-                  ];
-                } else {
-                  m[txHash] = receipts[txHash];
+            const result: Array<TxReceiptsWithMetadata> =
+              await this.cluster.parallelizeMethod<
+                Event,
+                TxReceiptsWithMetadata
+              >("getEventReceipts", events, chain);
+            LOGGER.alert(`EventReceiptResult`, { result });
+            const receipts =
+              result &&
+              result.reduce((m, receipts) => {
+                for (const txHash of Object.keys(receipts)) {
+                  if (txHash in m) {
+                    m[txHash].meta = [
+                      ...m[txHash].meta,
+                      ...receipts[txHash].meta,
+                    ];
+                  } else {
+                    m[txHash] = receipts[txHash];
+                  }
                 }
-              }
-              return m;
-            }, {} as TxReceiptsWithMetadata);
+                return m;
+              }, {} as TxReceiptsWithMetadata);
 
             yield {
               chain,
@@ -329,19 +331,22 @@ export class OpenSeaProvider
           retryCount = 0;
           retryQuery = false;
         } catch (e) {
+          LOGGER.error(`Query error`, {
+            error: /quorum/.test(e.message) ? `Quorum error` : e.message,
+            reason: e.reason,
+            fromBlock,
+            toBlock,
+            stack: e.stack.substr(0, 500),
+          });
           if (retryCount < 3) {
             // try again
             retryCount++;
             i -= i - (BLOCK_RANGE + 1) < 0 ? i : BLOCK_RANGE + 1;
             retryQuery = true;
+          } else if (retryCount > 3) {
+            LOGGER.crit(`Not able to recover from query errors`);
+            throw new Error(`Not able to recover from query errors`);
           }
-          LOGGER.error(`Query error`, {
-            error: e.message,
-            reason: e.reason,
-            fromBlock,
-            toBlock,
-            stack: e.stack,
-          });
         }
       }
     }
@@ -352,20 +357,15 @@ export class OpenSeaProvider
     chain: Blockchain
   ): Promise<TxReceiptsWithMetadata> {
     const receipts: TxReceiptsWithMetadata = {};
-    // return receipts;
     for (const event of events) {
-      if (
-        !("getTransactionReceipt" in event) ||
-        !(typeof event.getTransactionReceipt === "function")
-      ) {
-        this.restoreEventWrap(event, chain);
-      }
-
       const queryReceiptStart = performance.now();
       this.incrMetric(
         `opensea.${chain}.event_txReceiptProcess.numReceiptsPerSecond`
       );
-      const receipt: TransactionReceipt = await event.getTransactionReceipt();
+      const receipt: TransactionReceipt = await this.getEventReceipt(
+        event,
+        chain
+      );
       const queryReceiptEnd = performance.now();
       MetricsReporter.submit(
         `opensea.${chain}.event_queryTxReceipt.latency`,
@@ -377,7 +377,7 @@ export class OpenSeaProvider
           meta: [this.getEventMetadata(event, receipt, chain)],
         };
       } else {
-        LOGGER.info(`Multi-sale TX`, {
+        LOGGER.debug(`Multi-sale TX`, {
           event,
           receipt,
         });
@@ -392,7 +392,35 @@ export class OpenSeaProvider
     return receipts;
   }
 
-  public restoreEventWrap(event: Event, chain: Blockchain) {
+  private async getEventReceipt(
+    event: Event,
+    chain: Blockchain,
+    retryCount = 0
+  ): Promise<TransactionReceipt> {
+    if (
+      !("getTransactionReceipt" in event) ||
+      !(typeof event.getTransactionReceipt === "function")
+    ) {
+      this.restoreEventWrap(event, chain);
+    }
+
+    try {
+      return await event.getTransactionReceipt();
+    } catch (e) {
+      if (retryCount > 3) {
+        LOGGER.crit(`Failed to get event receipt`, {
+          error: e,
+          event,
+        });
+        e.message = `Unabled to get event receipt`;
+        throw e;
+      }
+      retryCount++;
+      return await this.getEventReceipt(event, chain, retryCount);
+    }
+  }
+
+  private restoreEventWrap(event: Event, chain: Blockchain) {
     event.getTransactionReceipt = async (): Promise<TransactionReceipt> => {
       return await this.chains[chain].provider.getTransactionReceipt(
         event.transactionHash
@@ -416,6 +444,10 @@ export class OpenSeaProvider
       price: originalPrice,
       data: null,
     };
+
+    if (!originalPrice) {
+      eventMetadata.price = event.args[4];
+    }
 
     let eventSigs,
       isERC721,
@@ -443,10 +475,12 @@ export class OpenSeaProvider
         ERC721Logs,
         ERC1155Logs,
       } = this.reduceParsedLogs(relevantLogs));
-      const price = hasERC20 ? this.getERC20Price(ERC20Logs) : originalPrice;
+      const price = hasERC20
+        ? this.getERC20Price(ERC20Logs)
+        : eventMetadata.price;
       eventMetadata.eventSignatures = eventSigs;
 
-      LOGGER.info(`Found event index from ${parsedLogs.length} receipt logs`, {
+      LOGGER.debug(`Found event index from ${parsedLogs.length} receipt logs`, {
         idx: eventIndex,
         tx: receipt.transactionHash,
         event: event.event,
@@ -472,7 +506,7 @@ export class OpenSeaProvider
             contractAddress: ERC721Transfer.contract,
             data: ERC721Transfer.decodedData,
           };
-          LOGGER.info(`ERC721Transfer`, {
+          LOGGER.debug(`ERC721Transfer`, {
             ...eventMetadata,
             tx: receipt.transactionHash,
           });
@@ -494,14 +528,14 @@ export class OpenSeaProvider
             tokenID: null,
             data: ERC1155TransferSingle.decodedData,
           };
-          LOGGER.info(`ERC1155TransferSingle`, {
+          LOGGER.debug(`ERC1155TransferSingle`, {
             ...eventMetadata,
             tx: receipt.transactionHash,
           });
           return eventMetadata;
         } else if (ERC1155TransferBatch) {
           // TODO
-          LOGGER.info(`ERC1155TransferBatch`, {
+          LOGGER.debug(`TODO: ERC1155TransferBatch`, {
             ...eventMetadata,
             tx: receipt.transactionHash,
           });
@@ -531,7 +565,7 @@ export class OpenSeaProvider
     event: Event,
     receipt: TransactionReceipt
   ) {
-    LOGGER.warn(`Event is NON_STANDARD`, { eventIndex, event, receipt });
+    LOGGER.warning(`Event is NON_STANDARD`, { eventIndex, event, receipt });
   }
 
   public getERC20Price(logs: EventLogType[]): BigNumber {

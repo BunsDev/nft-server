@@ -9,7 +9,7 @@ import { workerData } from "worker_threads";
 enum WorkerState {
   INITIALIZING = "initializing",
   BUSY = "busy",
-  FREE = "free",
+  AVAILABLE = "available",
   ERROR = "error",
 }
 
@@ -40,10 +40,10 @@ enum WorkerEvents {
   ERROR = "error",
 }
 
-type DeferredWork = {
-  resolve(result: unknown): void;
-  reject(reason: unknown): void;
-  promise: Promise<unknown>;
+type DeferredWork<T> = {
+  resolve(result: T): void;
+  reject(reason: T): void;
+  promise: Promise<T>;
 };
 
 type ClusterMember = {
@@ -58,7 +58,7 @@ type WorkerWork = {
   uuid: string;
   method?: string;
   data?: unknown;
-  deferred?: DeferredWork;
+  deferred?: DeferredWork<unknown>;
   result?: unknown;
 };
 
@@ -153,10 +153,15 @@ export class ClusterManager implements IClusterManager {
 
   get availableWorkerCount(): number {
     let count = 0;
+    const states: Record<string, WorkerState> = {};
     for (const w of this.workers.values()) {
-      if ([WorkerState.FREE, WorkerState.BUSY].indexOf(w.__state) > -1) {
+      states[w.uuid] = w.__state;
+      if ([WorkerState.AVAILABLE, WorkerState.BUSY].indexOf(w.__state) > -1) {
         count++;
       }
+    }
+    if (count < MAX_FORK_LEN) {
+      this.LOGGER.warning(`Unexpected worker count`, { count, states });
     }
     return count;
   }
@@ -175,40 +180,41 @@ export class ClusterManager implements IClusterManager {
     }
   }
 
-  public parallelizeMethod(
+  public async parallelizeMethod<T, K>(
     method: string,
-    indexedData: Array<unknown>,
+    indexedData: Array<T>,
     ...otherArgs: Array<unknown>
-  ): Promise<unknown> {
+  ): Promise<Array<K>> {
     const parallelism = this.availableWorkerCount;
     if (parallelism < 1) {
       throw new Error("No available workers");
     }
 
-    const remainder = indexedData.length % parallelism;
-    const groupSize = (indexedData.length - remainder) / parallelism;
-    const results: Array<Promise<unknown>> = [];
+    const remainder =
+      indexedData.length < parallelism ? 0 : indexedData.length % parallelism;
+    const groupSize =
+      indexedData.length < parallelism
+        ? indexedData.length
+        : (indexedData.length - remainder) / parallelism;
+    const results: Array<Promise<K>> = [];
     for (let i = 0; i < parallelism; i++) {
-      const deferred = getDeferred();
+      this.LOGGER.debug(`Parallelize method group`, { groupSize, i, method });
+      const group = indexedData.slice(i * groupSize, i * groupSize + groupSize);
+      if (!group.length) break;
+      const deferred = getDeferred<K>();
       results.push(deferred.promise);
-      this.LOGGER.info(`Parallelize method group`, { groupSize, i, method });
-      this.submitWork(method, deferred, [
-        indexedData.slice(i * groupSize, i * groupSize + groupSize),
-        ...otherArgs,
-      ]);
+      this.submitWork<K>(method, deferred, [group, ...otherArgs]);
     }
     return Promise.all(results);
   }
 
-  public submitWork(
+  public submitWork<T>(
     method: string,
-    deferred: DeferredWork,
+    deferred: DeferredWork<T>,
     data: unknown
   ): Array<string> {
     const clusterWorker = this.nextWorker;
-    if (
-      [WorkerState.BUSY, WorkerState.FREE].indexOf(clusterWorker.__state) < 0
-    ) {
+    if (this.isWorkerAvailable(clusterWorker)) {
       return this.submitWork(method, deferred, data);
     }
 
@@ -228,6 +234,12 @@ export class ClusterManager implements IClusterManager {
     this.LOGGER.info(`Sending work: ${workerUuid}`, { ...newWork, data: null });
     worker.send({ uuid: workUuid, method, data });
     return [workerUuid, workUuid];
+  }
+
+  private isWorkerAvailable(clusterWorker: ClusterMember): boolean {
+    return (
+      [WorkerState.BUSY, WorkerState.AVAILABLE].indexOf(clusterWorker.__state) < 0
+    );
   }
 
   private respawnWorker(workerUuid: string) {
@@ -300,7 +312,10 @@ export class ClusterManager implements IClusterManager {
     }
   }
 
-  private getWorkDeferred(workerUuid: string, workUuid: string): DeferredWork {
+  private getWorkDeferred(
+    workerUuid: string,
+    workUuid: string
+  ): DeferredWork<unknown> {
     const work = this.getWork(workerUuid, workUuid);
     return work && work.deferred;
   }
@@ -345,7 +360,7 @@ export class ClusterManager implements IClusterManager {
       }
       case ClusterMemberEvents.ONLINE: {
         this.LOGGER.info(`Worker ONLINE`, { uuid: workerUuid });
-        this.updateWorkerState(workerUuid, WorkerState.FREE);
+        this.updateWorkerState(workerUuid, WorkerState.AVAILABLE);
         break;
       }
     }
@@ -374,12 +389,12 @@ export class ClusterManager implements IClusterManager {
         const deferred = work.deferred;
         this.updateWorkState(workerUuid, work.uuid, workUpdate.__state);
         if (workUpdate.__state === WorkState.DONE) {
-          this.LOGGER.info(`Work State DONE`, {
+          this.LOGGER.alert(`Work State DONE`, {
             method,
             workerUuid,
-            uuid: work.uuid,
+            uuid: workUpdate.uuid,
           });
-          deferred.resolve(work.result);
+          deferred.resolve(workUpdate.result);
         }
       }
     }
@@ -460,8 +475,10 @@ export class ClusterWorker implements IClusterWorker {
           data as Array<unknown>
         );
 
+        this.LOGGER.alert(`Dispacth result`, { method });
+
         this.sendMessage({
-          __state: WorkerState.FREE,
+          __state: WorkerState.AVAILABLE,
           uuid: this.uuid,
           method: WorkerMessageMethod.UPDATE_STATE,
           work: {
@@ -495,8 +512,8 @@ export class ClusterWorker implements IClusterWorker {
   }
 }
 
-function getDeferred(): DeferredWork {
-  const deferred: DeferredWork = {
+function getDeferred<T>(): DeferredWork<T> {
+  const deferred: DeferredWork<T> = {
     promise: null,
     resolve: null,
     reject: null,

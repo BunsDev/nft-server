@@ -1,4 +1,4 @@
-FROM not:lts-alpine AS build
+FROM node:lts-alpine AS build
 
 WORKDIR /build
 

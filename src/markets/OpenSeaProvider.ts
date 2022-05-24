@@ -535,7 +535,7 @@ export class OpenSeaProvider
           return eventMetadata;
         } else if (ERC1155TransferBatch) {
           // TODO
-          LOGGER.debug(`TODO: ERC1155TransferBatch`, {
+          LOGGER.alert(`TODO: ERC1155TransferBatch`, {
             ...eventMetadata,
             tx: receipt.transactionHash,
           });

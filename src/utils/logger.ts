@@ -20,17 +20,54 @@ export type TLogger = {
   ) => void;
 };
 
+type LoggerConfigOptions = {
+  console: boolean;
+  error: boolean;
+  info: boolean;
+  debug: boolean;
+  datadog: boolean;
+  format: any;
+  levels: any;
+  transports: any;
+  path: string;
+  [x: string]: any;
+};
+
+const _defaults: LoggerConfigOptions = {
+  console: true,
+  error: false,
+  info: false,
+  debug: false,
+  datadog: false,
+  format: null,
+  levels: null,
+  transports: null,
+  path: "./",
+};
+
+export function configureLoggerDefaults(
+  newDefaults: Partial<LoggerConfigOptions>
+) {
+  for (const key of Object.keys(newDefaults) as Array<
+    keyof LoggerConfigOptions
+  >) {
+    if (key in _defaults) {
+      _defaults[key] = newDefaults[key];
+    }
+  }
+}
+
 export function getLogger(name: string, options?: LogOptions): TLogger {
   const {
-    console: _console = true,
-    error = true,
-    info = true,
-    debug = true,
-    datadog = false,
-    format = null,
-    levels = null,
-    transports = null,
-    path = "./",
+    console: _console = _defaults.console,
+    error = _defaults.error,
+    info = _defaults.info,
+    debug = _defaults.debug,
+    datadog = _defaults.datadog,
+    format = _defaults.format,
+    levels = _defaults.levels,
+    transports = _defaults.transports,
+    path = _defaults.path,
   } = options || {};
   const _logger: Logger = winston.createLogger({
     levels: levels ?? winston.config.npm.levels,

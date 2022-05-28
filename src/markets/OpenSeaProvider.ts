@@ -286,7 +286,7 @@ export class OpenSeaProvider
             queryFilterEnd - queryFilterStart
           );
 
-          LOGGER.info(
+          LOGGER.debug(
             `Found ${events.length} events between ${fromBlock} to ${toBlock}`
           );
 
@@ -497,12 +497,12 @@ export class OpenSeaProvider
     let relevantLogs;
 
     try {
-      const parsedLogs: EventLogType[] = logs.map((l) =>
-        this.parseLog(l, chain)
-      );
-      const eventIndex = this.getEventIndex(event, parsedLogs);
-      const eventLog = parsedLogs[eventIndex];
-      relevantLogs = this.findEventRelevantLogs(event, parsedLogs, eventIndex);
+      const eventIndex = this.getEventIndex(event, logs);
+      const parsedLogs: EventLogType[] = logs
+        .slice(0, eventIndex + 1)
+        .map((l) => this.parseLog(l, chain));
+      const eventLog = parsedLogs[parsedLogs.length - 1];
+      relevantLogs = this.findEventRelevantLogs(parsedLogs);
       ({
         eventSigs,
         isERC721,
@@ -602,7 +602,10 @@ export class OpenSeaProvider
     event: Event,
     receipt: TransactionReceipt
   ) {
-    LOGGER.warn(`Event is NON_STANDARD`, { eventIndex, event, receipt });
+    LOGGER.warn(`Event is NON_STANDARD`, {
+      eventIndex,
+      tx: event.transactionHash,
+    });
   }
 
   public getERC20Price(logs: EventLogType[]): BigNumber {
@@ -699,28 +702,23 @@ export class OpenSeaProvider
     return parsed;
   }
 
-  public getEventIndex(event: Event, parsedLogs: EventLogType[]): number {
-    for (let i = parsedLogs.length - 1; i >= 0; i--) {
-      const evtParsedLog = parsedLogs[i];
-      if (event.topics[0] === evtParsedLog.log.topic) {
+  public getEventIndex(event: Event, logs: Log[]): number {
+    for (let i = logs.length - 1; i >= 0; i--) {
+      if (event.logIndex === logs[i].logIndex) {
         return i;
       }
     }
     return null;
   }
 
-  public findEventRelevantLogs(
-    event: Event,
-    parsedLogs: EventLogType[],
-    eventIndex: number
-  ) {
+  public findEventRelevantLogs(parsedLogs: EventLogType[]) {
     const relevantLogs: EventLogType[] = [];
 
     if (parsedLogs.length === 1) {
       return relevantLogs;
     }
 
-    for (let i = eventIndex - 1; i >= 0; i--) {
+    for (let i = parsedLogs.length - 2; i >= 0; i--) {
       const parsedEvtLog = parsedLogs[i];
 
       switch (parsedEvtLog.type) {

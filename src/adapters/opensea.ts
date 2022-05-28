@@ -12,9 +12,15 @@ import { OpenSea as OpenSeaMarketConfig } from "../markets";
 import { OpenSeaProvider } from "../markets/OpenSeaProvider";
 import { BigNumber, ethers } from "ethers";
 import { ChainEvents } from "../markets/BaseMarketOnChainProvider";
-import { getLogger } from "../utils/logger";
+import { getLogger, configureLoggerDefaults } from "../utils/logger";
 import { ClusterManager, ClusterWorker } from "../utils/cluster";
 import cluster from "cluster";
+
+configureLoggerDefaults({
+  error: false,
+  info: false,
+  debug: false,
+});
 
 const LOGGER = getLogger("OPENSEA_ADAPTER", {
   datadog: !!process.env.DATADOG_API_KEY,

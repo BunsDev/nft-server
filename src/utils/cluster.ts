@@ -231,7 +231,7 @@ export class ClusterManager implements IClusterManager {
       deferred,
     };
     this.work.set(workerUuid, [...currentWork, newWork]);
-    this.LOGGER.info(`Sending work: ${workerUuid}`, { ...newWork, data: null });
+    this.LOGGER.debug(`Sending work: ${workerUuid}`, { ...newWork, data: null });
     worker.send({ uuid: workUuid, method, data });
     return [workerUuid, workUuid];
   }
@@ -243,7 +243,7 @@ export class ClusterManager implements IClusterManager {
   }
 
   private respawnWorker(workerUuid: string) {
-    this.LOGGER.info(`Respawn worker`, { uuid: workerUuid });
+    this.LOGGER.debug(`Respawn worker`, { uuid: workerUuid });
     const worker = this.workers.get(workerUuid).worker;
     const allWork = this.work.get(workerUuid);
     if (worker && worker.isConnected()) {
@@ -269,7 +269,7 @@ export class ClusterManager implements IClusterManager {
       return null;
     }
 
-    this.LOGGER.info(`Spawn Worker`, { uuid: workerUuid });
+    this.LOGGER.debug(`Spawn Worker`, { uuid: workerUuid });
     const worker: Worker = cluster.fork({
       WORKER_UUID: workerUuid,
       DATADOG_API_KEY: process.env.DATADOG_API_KEY,
@@ -335,7 +335,7 @@ export class ClusterManager implements IClusterManager {
     workerUuid: string,
     ...args: unknown[]
   ): void {
-    this.LOGGER.info(`Worker Event: ${event}`, {
+    this.LOGGER.debug(`Worker Event: ${event}`, {
       event,
       uuid: workerUuid,
       args,
@@ -359,7 +359,7 @@ export class ClusterManager implements IClusterManager {
         break;
       }
       case ClusterMemberEvents.ONLINE: {
-        this.LOGGER.info(`Worker ONLINE`, { uuid: workerUuid });
+        this.LOGGER.debug(`Worker ONLINE`, { uuid: workerUuid });
         this.updateWorkerState(workerUuid, WorkerState.AVAILABLE);
         break;
       }
@@ -379,7 +379,7 @@ export class ClusterManager implements IClusterManager {
     workerUuid: string
   ) {
     if (method === "PONG") {
-      return this.LOGGER.info(`Worker: PONG`, { uuid: workerUuid });
+      return this.LOGGER.debug(`Worker: PONG`, { uuid: workerUuid });
     }
 
     switch (method) {
@@ -466,7 +466,7 @@ export class ClusterWorker implements IClusterWorker {
   private async handleMessage({ uuid, method, data }: WorkerWork) {
     switch (method) {
       case "PING": {
-        this.LOGGER.info(`Worker PING`, { method, data });
+        this.LOGGER.debug(`Worker PING`, { method, data });
         this.sendPong();
         break;
       }

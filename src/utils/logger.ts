@@ -27,7 +27,9 @@ type LoggerConfigOptions = {
   debug: boolean;
   datadog: boolean;
   format: any;
-  levels: any;
+  levels: {
+    [x: string]: number;
+  };
   transports: any;
   path: string;
   [x: string]: any;
@@ -40,7 +42,13 @@ const _defaults: LoggerConfigOptions = {
   debug: false,
   datadog: false,
   format: null,
-  levels: null,
+  levels: {
+    alert: 0,
+    error: 1,
+    warn: 2,
+    info: 3,
+    debug: 4,
+  },
   transports: null,
   path: "./",
 };

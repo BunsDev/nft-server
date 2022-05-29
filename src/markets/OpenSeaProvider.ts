@@ -296,19 +296,36 @@ export class OpenSeaProvider
                 Event,
                 TxReceiptsWithMetadata
               >("getEventReceipts", events, chain);
-            LOGGER.warn(`EventReceiptResult`, { result });
-            const receipts =
-              result &&
-              result.reduce((m, r) => {
-                for (const txHash of Object.keys(r)) {
-                  if (txHash in m) {
-                    m[txHash].meta = [...m[txHash].meta, ...r[txHash].meta];
-                  } else {
-                    m[txHash] = r[txHash];
-                  }
+            let metaCount = 0;
+            const receipts: TxReceiptsWithMetadata = {};
+            for (const txsChunk of result) {
+              for (const hash of Object.keys(txsChunk)) {
+                if (!(hash in receipts)) {
+                  receipts[hash] = txsChunk[hash];
+                } else {
+                  receipts[hash].meta = receipts[hash].meta.concat(
+                    txsChunk[hash].meta
+                  );
+                }
+                metaCount += txsChunk[hash].meta.length;
+              }
+            }
+
+            if (metaCount !== events.length) {
+              const evtTxHashes = events.reduce((m, e) => {
+                if (!m.includes(e.transactionHash)) {
+                  m.push(e.transactionHash);
                 }
                 return m;
-              }, {} as TxReceiptsWithMetadata);
+              }, [] as Array<string>);
+              LOGGER.alert(`Irregular meta count`, {
+                metaCount,
+                eventCount: events.length,
+                missing: evtTxHashes.flatMap((hash) =>
+                  !(hash in receipts) ? [hash] : []
+                ),
+              });
+            }
 
             yield {
               chain,

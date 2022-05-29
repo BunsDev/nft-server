@@ -195,7 +195,7 @@ export class ClusterManager implements IClusterManager {
     const groupSize =
       indexedData.length < parallelism
         ? indexedData.length
-        : (indexedData.length - remainder) / parallelism;
+        : (indexedData.length + (parallelism - remainder)) / parallelism;
     const results: Array<Promise<K>> = [];
     for (let i = 0; i < parallelism; i++) {
       this.LOGGER.debug(`Parallelize method group`, { groupSize, i, method });

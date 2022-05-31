@@ -415,7 +415,7 @@ export class OpenSeaProvider
       );
 
       if (txReceipts.length !== eventsSlice.length) {
-        LOGGER.warn(`Receipt to event ratio unbalanced, possible multi-sale`, {
+        LOGGER.debug(`Receipt to event ratio unbalanced, possible multi-sale`, {
           eventsSlice: eventsSlice.length,
           txReceipts: txReceipts.length,
         });

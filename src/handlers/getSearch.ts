@@ -24,11 +24,12 @@ const handler = async (event: APIGatewayProxyEvent): Promise<IResponse> => {
       `${OPENSEARCH_DOMAIN}/collections/_search`,
       {
         query: {
-          query_string: {
-            query,
-            default_field: "name",
-            fuzziness: "AUTO",
-          },
+          regexp: {
+            name: {
+              value: `^.*${query}.*$`,
+              case_insensitive: true,
+            }
+          }
         },
       },
       {

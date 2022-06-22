@@ -14,7 +14,7 @@ const OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD;
 const handler = async (event: APIGatewayProxyEvent): Promise<IResponse> => {
   try {
     const { query } = event?.queryStringParameters || {};
-
+    console.log(OPENSEARCH_DOMAIN)
     const auth = Buffer.from(
       `${OPENSEARCH_USERNAME}:${OPENSEARCH_PASSWORD}`,
       "utf-8"
@@ -24,11 +24,8 @@ const handler = async (event: APIGatewayProxyEvent): Promise<IResponse> => {
       `${OPENSEARCH_DOMAIN}/collections/_search`,
       {
         query: {
-          regexp: {
-            name: {
-              value: `^.*${query}.*$`,
-              case_insensitive: true,
-            }
+          wildcard: {
+            name: `*${query}*`
           }
         },
       },

@@ -70,6 +70,7 @@ type WorkerMessage = {
 };
 
 interface IClusterManager {
+  adapterName: string;
   workers: Map<string, ClusterMember>;
   start(): void;
   get maxWorkerCount(): number;
@@ -84,6 +85,8 @@ export interface IClusterProvider {
   withCluster(kluster: IClusterManager): void;
   withWorker(worker: IClusterWorker): void;
   dispatchWorkMethod(method: string, ...args: Array<unknown>): Promise<unknown>;
+
+  cluster: IClusterManager;
 }
 
 type Callback = () => unknown;

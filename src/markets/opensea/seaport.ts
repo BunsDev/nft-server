@@ -70,22 +70,22 @@ function getItemType(itemType: number): ItemType {
 }
 
 function getSeaportShape(offer: any, consideration: any) {
-  return `${offer.map((o: any) => o.itemType)}:${consideration.map((c: any) => c.itemType)}`;
+  return `${offer.map((o: any) => o.itemType)}:${consideration.map(
+    (c: any) => c.itemType
+  )}`;
 }
-
-let MetricsReporter = DefaultMetricsReporter;
-const CONTRACT_NAME = "seaport";
 
 export default class SeaportProvider
   extends OpenSeaBaseProvider
   implements IMarketOnChainProvider, IClusterProvider
 {
-  public CONTRACT_NAME = CONTRACT_NAME;
+  public CONTRACT_NAME = "seaport";
 
   public withWorker(worker: ClusterWorker): void {
     super.withWorker(worker);
-    MetricsReporter = customMetricsReporter("", "", [`worker:${worker.uuid}`]);
-    this.overrideMetricsReporter(MetricsReporter);
+    this.MetricsReporter = customMetricsReporter("", "", [
+      `worker:${worker.uuid}`,
+    ]);
   }
 
   public async dispatchWorkMethod(
@@ -98,7 +98,8 @@ export default class SeaportProvider
   public async *fetchSales(): AsyncGenerator<ChainEvents> {
     // eslint-disable-next-line no-unreachable-loop
     for (const chain of Object.keys(this.chains) as Blockchain[]) {
-      const { deployBlock, contractAddress } = this.config.chains[chain];
+      const { deployBlock, contractAddress, providerName } =
+        this.config.chains[chain];
       const currentBlock: number = await this.chains[
         chain
       ].getCurrentBlockNumber();
@@ -108,7 +109,7 @@ export default class SeaportProvider
         chain,
         true,
         deployBlock,
-        CONTRACT_NAME
+        providerName
       );
       if (deployBlock && Number.isInteger(deployBlock)) {
         if (lastSyncedBlockNumber < deployBlock) {
@@ -116,7 +117,7 @@ export default class SeaportProvider
             Marketplace.Opensea,
             deployBlock,
             chain,
-            CONTRACT_NAME
+            providerName
           );
         }
         lastSyncedBlockNumber = Math.max(deployBlock, lastSyncedBlockNumber);
@@ -182,11 +183,11 @@ export default class SeaportProvider
             )
           ).filter((e) => !e.removed);
           const queryFilterEnd = performance.now();
-          MetricsReporter.submit(
+          this.MetricsReporter.submit(
             `opensea_seaport.${chain}.contract_queryFilter.blockRange`,
             toBlock - fromBlock
           );
-          MetricsReporter.submit(
+          this.MetricsReporter.submit(
             `opensea_seaport.${chain}.contract_queryFilter.latency`,
             queryFilterEnd - queryFilterStart
           );
@@ -235,6 +236,7 @@ export default class SeaportProvider
                 endBlock: toBlock,
               },
               receipts,
+              providerName,
             };
           } else {
             yield {
@@ -244,6 +246,7 @@ export default class SeaportProvider
                 startBlock: fromBlock,
                 endBlock: toBlock,
               },
+              providerName,
             };
           }
 

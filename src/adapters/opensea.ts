@@ -7,15 +7,32 @@ import { Coingecko } from "../api/coingecko";
 import { CurrencyConverter } from "../api/currency-converter";
 import { COINGECKO_IDS } from "../constants";
 import { sleep, handleError, filterObject, restoreBigNumber } from "../utils";
-import { Blockchain, CollectionData, LowVolumeError, Marketplace, SaleData } from "../types";
-import { OpenSea as OpenSeaMarketConfig } from "../markets";
+import {
+  Blockchain,
+  CollectionData,
+  LowVolumeError,
+  Marketplace,
+  SaleData,
+} from "../types";
+import { MarketChainConfig, MarketConfig, OpenSea as OpenSeaMarketConfig } from "../markets";
 import { OpenSeaProvider } from "../markets/OpenSeaProvider";
 import { BigNumber, ethers } from "ethers";
 import { ChainEvents } from "../markets/BaseMarketOnChainProvider";
 import { getLogger, configureLoggerDefaults } from "../utils/logger";
-import { ClusterManager, ClusterWorker } from "../utils/cluster";
+import {
+  ClusterManager,
+  ClusterWorker,
+  IClusterProvider,
+} from "../utils/cluster";
 import cluster from "cluster";
 import { IMarketOnChainProvider } from "../interfaces";
+import { fork } from "child_process";
+
+type AdapterProvider = IMarketOnChainProvider & IClusterProvider;
+type AdapterProviderConfig = {
+  providerConfig: MarketConfig;
+  chainConfig: MarketChainConfig;
+};
 
 configureLoggerDefaults({
   error: false,
@@ -27,17 +44,7 @@ const LOGGER = getLogger("OPENSEA_ADAPTER", {
   datadog: !!process.env.DATADOG_API_KEY,
 });
 
-const OSProviders = OpenSeaProvider.build(OpenSeaMarketConfig);
-
-if (cluster.isWorker) {
-  OSProviders.forEach((p) =>
-    ClusterWorker.create(process.env.WORKER_UUID, "OPENSEA", p)
-  );
-} else {
-  OSProviders.forEach((p) => ClusterManager.create("OPENSEA", p));
-}
-
-async function runSales(provider: IMarketOnChainProvider): Promise<void> {
+async function runSales(provider: AdapterProvider): Promise<void> {
   const { data: collections } = await Collection.getSorted({
     marketplace: Marketplace.Opensea,
   });
@@ -60,6 +67,7 @@ async function runSales(provider: IMarketOnChainProvider): Promise<void> {
       blockRange,
       receipts,
       blocks: blockMap,
+      providerName,
     } = (await nextSales).value as ChainEvents;
     LOGGER.info(`Got ${events.length} sales`);
 
@@ -68,7 +76,7 @@ async function runSales(provider: IMarketOnChainProvider): Promise<void> {
         Marketplace.Opensea,
         blockRange.endBlock,
         chain,
-        provider.CONTRACT_NAME,
+        providerName
       );
       nextSales = itSales.next();
       continue;
@@ -165,13 +173,13 @@ async function runSales(provider: IMarketOnChainProvider): Promise<void> {
       Marketplace.Opensea,
       blockRange.endBlock,
       chain,
-      provider.CONTRACT_NAME
+      providerName
     );
     nextSales = itSales.next();
   }
 }
 
-async function run(provider: IMarketOnChainProvider): Promise<void> {
+async function run(provider: AdapterProvider): Promise<void> {
   try {
     while (true) {
       await Promise.all([/* runCollections(), */ runSales(provider)]);
@@ -184,8 +192,40 @@ async function run(provider: IMarketOnChainProvider): Promise<void> {
 
 const OpenseaAdapter: DataAdapter = { run };
 
-if (cluster.isPrimary) {
-  OSProviders.forEach(p => OpenseaAdapter.run(p));
+function spawnProviderChild(p: AdapterProviderConfig, run = 0) {
+  LOGGER.info(`Spawn Provider Child`, { provider: p, run });
+  const providerChild = fork(__filename, [
+    "provider-child",
+    p.chainConfig.providerName,
+  ]);
+  providerChild.on("exit", (code) => {
+    LOGGER.alert(`Provider Child Exit`, { provider: p, code, run });
+    if (run < 3) {
+      spawnProviderChild(p, run + 1);
+    }
+  });
+}
+
+if (!process.argv[2]) {
+  OpenSeaProvider.build(OpenSeaMarketConfig).forEach((p) =>
+    spawnProviderChild(p)
+  );
+} else if (process.argv[2] === "provider-child") {
+  const OSProviders = OpenSeaProvider.build(OpenSeaMarketConfig);
+  const providerName = process.argv[3];
+  const provider = OSProviders.find(
+    (p) => p.chainConfig.providerName === providerName
+  ).instantiate();
+  if (cluster.isWorker) {
+    ClusterWorker.create(
+      process.env.WORKER_UUID,
+      `OPENSEA_${providerName}`,
+      provider
+    );
+  } else {
+    ClusterManager.create(`OPENSEA_${providerName}`, provider);
+    OpenseaAdapter.run(provider);
+  }
 }
 
 export default OpenseaAdapter;

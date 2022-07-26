@@ -12,10 +12,7 @@ import { Blockchain, Marketplace } from "../../types";
 import { AdapterState } from "../../models";
 import { TransactionReceipt, Log, Block } from "@ethersproject/providers";
 import { DEFAULT_TOKEN_ADDRESSES } from "../../constants";
-import {
-  MetricsReporter as DefaultMetricsReporter,
-  customMetricsReporter,
-} from "../../utils/metrics";
+import { customMetricsReporter } from "../../utils/metrics";
 import { ClusterWorker, IClusterProvider } from "../../utils/cluster";
 import { restoreBigNumber } from "../../utils";
 import OpenSeaBaseProvider from "./base";
@@ -38,19 +35,15 @@ const EVENT_RECEIPT_PARALLELISM: number = process.env.EVENT_RECEIPT_PARALLELISM
  * OpenSea Legacy (wyvern) Contract Chain Provider
  */
 
-const CONTRACT_NAME = "wyvern";
-let MetricsReporter = DefaultMetricsReporter;
-
 export default class WyvernProvider
   extends OpenSeaBaseProvider
   implements IMarketOnChainProvider, IClusterProvider
 {
-  public CONTRACT_NAME = CONTRACT_NAME;
-
   public withWorker(worker: ClusterWorker): void {
     super.withWorker(worker);
-    MetricsReporter = customMetricsReporter("", "", [`worker:${worker.uuid}`]);
-    this.overrideMetricsReporter(MetricsReporter);
+    this.MetricsReporter = customMetricsReporter("", "", [
+      `worker:${worker.uuid}`,
+    ]);
   }
 
   public async dispatchWorkMethod(
@@ -68,7 +61,8 @@ export default class WyvernProvider
   public async *fetchSales(): AsyncGenerator<ChainEvents> {
     // eslint-disable-next-line no-unreachable-loop
     for (const chain of Object.keys(this.chains) as Blockchain[]) {
-      const { deployBlock, contractAddress } = this.config.chains[chain];
+      const { deployBlock, contractAddress, providerName } =
+        this.config.chains[chain];
       const currentBlock: number = await this.chains[
         chain
       ].getCurrentBlockNumber();
@@ -78,7 +72,7 @@ export default class WyvernProvider
         chain,
         true,
         deployBlock,
-        CONTRACT_NAME
+        providerName
       );
       if (deployBlock && Number.isInteger(deployBlock)) {
         if (lastSyncedBlockNumber < deployBlock) {
@@ -86,7 +80,7 @@ export default class WyvernProvider
             Marketplace.Opensea,
             deployBlock,
             chain,
-            CONTRACT_NAME
+            providerName
           );
         }
         lastSyncedBlockNumber = Math.max(deployBlock, lastSyncedBlockNumber);
@@ -150,11 +144,11 @@ export default class WyvernProvider
             )
           ).filter((e) => !e.removed);
           const queryFilterEnd = performance.now();
-          MetricsReporter.submit(
+          this.MetricsReporter.submit(
             `opensea.${chain}.contract_queryFilter.blockRange`,
             toBlock - fromBlock
           );
-          MetricsReporter.submit(
+          this.MetricsReporter.submit(
             `opensea.${chain}.contract_queryFilter.latency`,
             queryFilterEnd - queryFilterStart
           );
@@ -222,6 +216,7 @@ export default class WyvernProvider
                 endBlock: toBlock,
               },
               receipts,
+              providerName,
             };
           } else {
             yield {
@@ -231,6 +226,7 @@ export default class WyvernProvider
                 startBlock: fromBlock,
                 endBlock: toBlock,
               },
+              providerName,
             };
           }
 
@@ -296,7 +292,7 @@ export default class WyvernProvider
 
       const queryReceiptEnd = performance.now();
       const queryTime = queryReceiptEnd - queryReceiptStart;
-      MetricsReporter.submit(
+      this.MetricsReporter.submit(
         `opensea.${chain}.event_queryTxReceipt.latency`,
         queryTime / eventsSlice.length
       );
@@ -587,8 +583,6 @@ export default class WyvernProvider
       }
     );
   }
-
-  
 
   public getEventIndex(event: Event, logs: Log[]): number {
     for (let i = logs.length - 1; i >= 0; i--) {

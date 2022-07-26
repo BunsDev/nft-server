@@ -58,6 +58,7 @@ export type ChainEvents = {
   events: Array<Event>;
   receipts?: TxReceiptsWithMetadata;
   blocks?: Record<string, Block>;
+  providerName: string;
 };
 export type SaleEvents = Partial<Record<Blockchain, Array<ChainEvents>>>;
 export type SaleEventFragments = Partial<Record<Blockchain, EventFragment>>;

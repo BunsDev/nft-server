@@ -39,9 +39,16 @@ export class OpenSeaProvider {
           },
         };
         providerConfig.chains[chain] = chainConfig;
-        marketProviders.push(
-          new providers[chainConfig.provider](providerConfig)
-        );
+        marketProviders.push({
+          providerConfig,
+          chainConfig,
+          instantiate() {
+            return new providers[this.chainConfig.providerName](
+              this.providerConfig,
+              this.chainConfig.providerName
+            );
+          },
+        });
       }
     }
     return marketProviders;

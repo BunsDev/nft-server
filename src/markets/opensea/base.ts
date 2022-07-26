@@ -40,8 +40,6 @@ const GET_BLOCK_PARALLELISM: number = process.env.GET_BLOCK_PARALLELISM
   ? parseInt(process.env.GET_BLOCK_PARALLELISM)
   : 5;
 
-let MetricsReporter = DefaultMetricsReporter;
-
 type BlockFn = () => Promise<Block>;
 type BlockPromise = BlockFn | Promise<Block>;
 
@@ -65,13 +63,16 @@ export default abstract class OpenSeaBaseProvider {
   public events: SaleEvents;
   public config: MarketConfig;
 
-  protected metrics: Map<number, Record<string, MetricData>>;
-  protected __metricsInterval: NodeJS.Timer;
-  protected cluster: ClusterManager;
-  protected worker: ClusterWorker;
-  protected blocks: Map<number, BlockPromise> = new Map();
+  public metrics: Map<number, Record<string, MetricData>>;
+  public __metricsInterval: NodeJS.Timer;
+  public cluster: ClusterManager;
+  public worker: ClusterWorker;
+  public blocks: Map<number, BlockPromise> = new Map();
 
-  constructor(config: MarketConfig) {
+  public CONTRACT_NAME = "os_base";
+  public MetricsReporter = DefaultMetricsReporter;
+
+  constructor(config: MarketConfig, name: string) {
     const { chains, contracts, interfaces, topics }: MarketProviders =
       BaseMarketOnChainProviderFactory.createMarketProviders(config);
     this.config = config;
@@ -79,12 +80,9 @@ export default abstract class OpenSeaBaseProvider {
     this.contracts = contracts;
     this.interfaces = interfaces;
     this.topics = topics;
+    this.CONTRACT_NAME = name;
 
     this.initMetrics();
-  }
-
-  protected overrideMetricsReporter(reporter: any) {
-    MetricsReporter = reporter;
   }
 
   public withCluster(kluster: ClusterManager): void {
@@ -110,7 +108,7 @@ export default abstract class OpenSeaBaseProvider {
       const metrics: Record<string, MetricData> = this.metrics.get(time);
       for (const metric of Object.keys(metrics)) {
         const value = metrics[metric];
-        MetricsReporter.submit(
+        this.MetricsReporter.submit(
           value.metric,
           value.value,
           value.type || "gauge",
@@ -279,7 +277,7 @@ export default abstract class OpenSeaBaseProvider {
       parsed.errors.push(new UnparsableLogError(log, errors));
     }
     const parseLogEnd = performance.now();
-    MetricsReporter.submit(
+    this.MetricsReporter.submit(
       `opensea.${chain}.receipt_parseLog.latency`,
       parseLogEnd - parseLogStart
     );

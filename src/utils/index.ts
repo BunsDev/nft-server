@@ -2,7 +2,13 @@ import axios from "axios";
 import web3 from "web3";
 import { Block } from "web3-eth";
 import { Log } from "web3-core";
-import { Blockchain, Marketplace, SaleData } from "../types";
+import { Blockchain, Marketplace, SaleData, SerializedBigNumber } from "../types";
+import { getLogger } from "./logger";
+import { BigNumber } from "ethers";
+
+const LOGGER = getLogger("ERROR_HANDLER", {
+  datadog: !!process.env.DATADOG_API_KEY,
+});
 
 export const sleep = async (seconds: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, seconds * 1000));
@@ -60,18 +66,30 @@ export function getPriceAtDate(
 export async function handleError(error: Error, context: string) {
   if (axios.isAxiosError(error)) {
     if (error.response?.status === 404) {
-      console.error(`Error [${context}] - not found: ${error.message}`);
+      LOGGER.error(`Error [${context}] - not found: ${error.message}`, {
+        error,
+        stack: error.stack,
+      });
     }
     if (error.response?.status === 429) {
       // Backoff for 1 minute if rate limited
-      console.error(`Error [${context}] - too many requests: ${error.message}`);
+      LOGGER.error(`Error [${context}] - too many requests: ${error.message}`, {
+        error,
+        stack: error.stack,
+      });
       await sleep(60);
     }
     if (error.response?.status === 500 || error.response.status === 504) {
-      console.error(`Error [${context}] - server error: ${error.message}`);
+      LOGGER.error(`Error [${context}] - server error: ${error.message}`, {
+        error,
+        stack: error.stack,
+      });
     }
   }
-  console.error(`Error [${context}] - other error: ${error.message}`);
+  LOGGER.error(`Error [${context}] - other error: ${error.message}`, {
+    error,
+    stack: error.stack,
+  });
 }
 
 export function filterObject(object: Object) {
@@ -223,3 +241,12 @@ export const getSalesFromLogs = async ({
     latestBlock: params.toBlock,
   };
 };
+
+export function restoreBigNumber(
+  bigNum: SerializedBigNumber | BigNumber
+): BigNumber {
+  if (bigNum instanceof BigNumber) {
+    return bigNum;
+  }
+  return BigNumber.from(bigNum.hex);
+}

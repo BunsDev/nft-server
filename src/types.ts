@@ -67,11 +67,11 @@ export interface CollectionData {
   symbol: string;
   description: string;
   logo: string;
-  website: string;
-  discord_url: string;
-  telegram_url: string;
-  twitter_username: string;
-  medium_username: string;
+  website?: string;
+  discord_url?: string;
+  telegram_url?: string;
+  twitter_username?: string;
+  medium_username?: string;
   chains?: Blockchain[];
   marketplaces?: Marketplace[];
 }
@@ -106,4 +106,17 @@ export interface SaleData {
   buyerAddress: string;
   marketplace: Marketplace;
   chain: Blockchain;
+  metadata?: Record<string, any>;
+  count?: number;
 }
+
+export type HumanABI = string[] | string;
+
+export type ERCStandard = {
+  abi: HumanABI;
+};
+
+export type SerializedBigNumber = {
+  hex?: string;
+  type: string;
+};

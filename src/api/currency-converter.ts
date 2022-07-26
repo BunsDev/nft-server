@@ -1,8 +1,14 @@
 import axios from "axios";
+import { getLogger } from "../utils/logger";
 import { Coingecko } from "../api/coingecko";
 import { DEFAULT_TOKEN_ADDRESSES, COINGECKO_IDS } from "../constants";
 import { Blockchain, SaleData } from "../types";
 import { handleError, getPriceAtDate, roundUSD } from "../utils";
+import { LlamaFi, CoinResponse, PRICE_CACHE } from "./llamafi";
+
+const LOGGER = getLogger("CURRENCY_CONVERTER", {
+  datadog: !!process.env.DATADOG_API_KEY,
+});
 
 export class CurrencyConverter {
   private static BASE_TOKENS = Object.values(Blockchain).map((chain) => ({
@@ -30,7 +36,7 @@ export class CurrencyConverter {
       );
 
       if (!data.length) {
-        throw "Error";
+        throw new Error("Error");
       }
 
       return data;
@@ -78,25 +84,28 @@ export class CurrencyConverter {
 
     // Get unique token addresses from sales, excluding native tokens
     const tokenAddressPrices: Record<string, number[][]> = {};
-    const tokenAddresses = sales.reduce((tokenAddresses: Record<string, string>[], sale: SaleData) => {
-      const flattenedTokenAddresses = tokenAddresses.map(
-        (address) => address.address
-      );
-      const unique = !flattenedTokenAddresses.includes(
-        sale.paymentTokenAddress
-      );
-      const notBaseToken = !CurrencyConverter.BASE_TOKENS_ADDRESSES.includes(
-        sale.paymentTokenAddress
-      );
-      if (unique && notBaseToken) {
-        tokenAddresses.push({
-          address: sale.paymentTokenAddress,
-          chain: sale.chain,
-        });
+    const tokenAddresses = sales.reduce(
+      (tokenAddresses: Record<string, string>[], sale: SaleData) => {
+        const flattenedTokenAddresses = tokenAddresses.map(
+          (address) => address.address
+        );
+        const unique = !flattenedTokenAddresses.includes(
+          sale.paymentTokenAddress
+        );
+        const notBaseToken = !CurrencyConverter.BASE_TOKENS_ADDRESSES.includes(
+          sale.paymentTokenAddress
+        );
+        if (unique && notBaseToken) {
+          tokenAddresses.push({
+            address: sale.paymentTokenAddress,
+            chain: sale.chain,
+          });
+          return tokenAddresses;
+        }
         return tokenAddresses;
-      }
-      return tokenAddresses;
-    }, []);
+      },
+      []
+    );
 
     // Get prices for native/base tokens
     for (const baseToken of CurrencyConverter.BASE_TOKENS) {
@@ -192,5 +201,89 @@ export class CurrencyConverter {
     }
 
     return sales;
+  }
+
+  public static async matchSalesWithPrices(sales: Array<SaleData>) {
+    LOGGER.debug(`matchSalesWithPrices`, { sales: sales.length });
+    const prices: Record<string, Record<string, Record<number, number>>> = {};
+    const uniqueAddressesTimestamps = sales.reduce(
+      (c, sale) => {
+        const t = parseInt(sale.timestamp);
+        const address =
+          sale.paymentTokenAddress ?? DEFAULT_TOKEN_ADDRESSES[sale.chain];
+        if (!c.timestamps.includes(t)) c.timestamps.push(t);
+        if (!(sale.chain in c.addresses)) c.addresses[sale.chain] = [];
+        if (!c.addresses[sale.chain].includes(address))
+          c.addresses[sale.chain].push(address);
+        return c;
+      },
+      { timestamps: [], addresses: {} } as {
+        timestamps: number[];
+        addresses: Record<string, string[]>;
+      }
+    );
+    const timestampMap = uniqueAddressesTimestamps.timestamps.reduce((c, t) => {
+      c[t] = Math.round(t / 1000);
+      return c;
+    }, {} as Record<number, number>);
+
+    LOGGER.debug(`UniqueAddresses`, { uniqueAddressesTimestamps });
+    LOGGER.debug(`Chains`, {
+      chains: Object.keys(uniqueAddressesTimestamps.addresses),
+    });
+
+    for (const chain of Object.keys(uniqueAddressesTimestamps.addresses)) {
+      for (const address of uniqueAddressesTimestamps.addresses[chain]) {
+        LOGGER.debug(`Chain address`, { address });
+        try {
+          const saleTokenPrices = await LlamaFi.getHistoricPricesByContract(
+            address,
+            Object.values(timestampMap),
+            chain
+          );
+          LOGGER.debug(`Sale token prices`, {
+            chain,
+            address,
+            saleTokenPrices,
+          });
+          if (!(chain in prices)) prices[chain] = {};
+          prices[chain][address] = saleTokenPrices;
+        } catch (e) {
+          console.log(e);
+          LOGGER.error(`LlamaFi error`, {
+            e,
+            address,
+            sale: sales.find((s) => s.paymentTokenAddress === address),
+          });
+        }
+      }
+    }
+
+    LOGGER.debug(`LlamaFi Prices`, { prices });
+
+    for (const sale of sales) {
+      const t = parseInt(sale.timestamp);
+      // If the token is a base token
+      if (
+        CurrencyConverter.BASE_TOKENS_ADDRESSES.includes(
+          sale.paymentTokenAddress
+        )
+      ) {
+        sale.priceBase = sale.price;
+        sale.priceUSD = roundUSD(
+          sale.price *
+            prices[sale.chain][sale.paymentTokenAddress][timestampMap[t]]
+        );
+        continue;
+      }
+      sale.priceBase = sale.priceUSD =
+        sale.price *
+        prices[sale.chain][sale.paymentTokenAddress][timestampMap[t]];
+
+      LOGGER.debug(`Convert sale price`, {
+        price: sale.price,
+        USD: sale.priceUSD,
+      });
+    }
   }
 }

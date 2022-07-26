@@ -1,4 +1,4 @@
-import { Blockchain, Marketplace, MoralisChain } from "./types";
+import { Blockchain, HumanABI, Marketplace, MoralisChain } from "./types";
 
 require('dotenv').config()
 
@@ -140,3 +140,45 @@ export const COINGECKO_IDS: Record<Blockchain, any> = {
     symbol: "one",
   },
 };
+
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC721/IERC721.sol
+export const IERC721Standard: HumanABI = [
+  "event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId)",
+  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
+  "event ApprovalForAll(address indexed owner, address indexed operator, bool approved)",
+];
+
+export const IERC721Events: Map<string, string> = IERC721Standard.reduce(
+  reduceToEvents,
+  new Map()
+);
+
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC1155/IERC1155.sol
+export const IERC1155Standard: HumanABI = [
+  "event TransferSingle(address indexed operator, address indexed from, address indexed to, uint256 id, uint256 value)",
+  "event TransferBatch(address indexed operator, address indexed from, address indexed to, uint256[] ids, uint256[] values)",
+  "event ApprovalForAll(address indexed account, address indexed operator, bool approved)",
+  "event URI(string value, uint256 indexed id)",
+];
+
+export const IERC1155Events: Map<string, string> = IERC1155Standard.reduce(
+  reduceToEvents,
+  new Map()
+);
+
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol
+export const OwnableStandard: HumanABI = [
+  "event OwnershipTransferred(address indexed previousOwner, address indexed newOwner)",
+];
+
+export const IERC20Standard: HumanABI = [
+  "event Transfer(address indexed from, address indexed to, uint256 value)",
+  "event Approval(address indexed owner, address indexed spender, uint256 value)",
+];
+
+function reduceToEvents(record: Map<string, string>, abi: string) {
+  record.set(abi.match(/^event\s(.[^()]+)/)[1], abi);
+  return record;
+}
+
+export const LLAMA_FI_COIN_API = "https://coins.llama.fi/coin/timestamps";

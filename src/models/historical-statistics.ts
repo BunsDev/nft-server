@@ -1,9 +1,14 @@
+import { getLogger } from "../utils/logger";
 import { Collection } from ".";
 import { Blockchain, Marketplace, SaleData } from "../types";
 import { handleError } from "../utils";
 import dynamodb from "../utils/dynamodb";
 
 const ONE_DAY_MILISECONDS = 86400 * 1000;
+
+const LOGGER = getLogger("HISTORICAL_STATISTICS", {
+  datadog: !!process.env.DATADOG_API_KEY,
+});
 
 export class HistoricalStatistics {
   static async getGlobalStatistics(sortAsc: boolean = true) {
@@ -35,11 +40,13 @@ export class HistoricalStatistics {
     chain,
     marketplace,
     volumes,
+    failureAttempt = 0,
   }: {
     slug: string;
     chain: Blockchain;
     marketplace: Marketplace;
     volumes: any;
+    failureAttempt?: number;
   }) {
     const overviewStatistics = await Collection.getStatisticsByMarketplace(
       slug,
@@ -47,6 +54,9 @@ export class HistoricalStatistics {
     );
 
     if (overviewStatistics) {
+      LOGGER.debug(`updateCollectionStatistics(): overviewStatistics`, {
+        overviewStatistics,
+      });
       const { fromSales } = overviewStatistics;
 
       if (!fromSales) {
@@ -110,8 +120,9 @@ export class HistoricalStatistics {
 
     for (const timestamp in volumes) {
       const { volume, volumeUSD } = volumes[timestamp];
-      await dynamodb.transactWrite({
-        updateItems: [
+      let updateItems;
+      try {
+        updateItems = [
           {
             Key: {
               PK: `collection#${slug}`,
@@ -157,7 +168,7 @@ export class HistoricalStatistics {
           {
             Key: {
               PK: `statistics#${slug}`,
-              SK: timestamp,
+              SK: `${timestamp}`,
             },
             UpdateExpression: `
               ADD #chainvolume :volume,
@@ -179,7 +190,7 @@ export class HistoricalStatistics {
           {
             Key: {
               PK: `globalStatistics`,
-              SK: timestamp,
+              SK: `${timestamp}`,
             },
             UpdateExpression: `
               ADD #chainvolume :volume,
@@ -198,8 +209,58 @@ export class HistoricalStatistics {
               ":volumeUSD": volumeUSD,
             },
           },
-        ],
-      });
+        ];
+        LOGGER.debug(`updateCollectionStatistics(): volumes`, {
+          timestamp,
+          slug,
+          chain,
+          marketplace,
+          volumes,
+          failureAttempt,
+          updateItems,
+        });
+        await dynamodb.transactWrite({ updateItems });
+        LOGGER.debug(`SUCCESS updateCollectionStatistics(): volumes`, {
+          timestamp,
+          slug,
+          chain,
+          marketplace,
+          volumes,
+          failureAttempt,
+          updateItems,
+        });
+      } catch (e) {
+        if (failureAttempt < 3) {
+          failureAttempt++;
+          LOGGER.error(`updateCollectionStatistics()`, {
+            error: e,
+            timestamp,
+            slug,
+            chain,
+            marketplace,
+            volumes,
+            failureAttempt,
+            updateItems,
+          });
+          HistoricalStatistics.updateCollectionStatistics({
+            slug,
+            chain,
+            marketplace,
+            volumes,
+            failureAttempt,
+          });
+        } else {
+          LOGGER.alert(`updateCollectionStatistics()`, {
+            error: e,
+            timestamp,
+            volumes,
+            slug,
+            chain,
+            marketplace,
+            failureAttempt,
+          });
+        }
+      }
     }
   }
 
@@ -236,6 +297,12 @@ export class HistoricalStatistics {
     try {
       const volumes = await HistoricalStatistics.getDailyVolumesFromSales({
         sales,
+      });
+      LOGGER.debug(`updateStatistics()`, {
+        slug,
+        chain,
+        marketplace,
+        volumes,
       });
       await HistoricalStatistics.updateCollectionStatistics({
         slug,
@@ -488,7 +555,7 @@ export class HistoricalStatistics {
           {
             Key: {
               PK: `statistics#${slug}`,
-              SK: timestamp,
+              SK: `${timestamp}`,
             },
             UpdateExpression: `
               ADD #chainvolume :volume,
@@ -510,7 +577,7 @@ export class HistoricalStatistics {
           {
             Key: {
               PK: `globalStatistics`,
-              SK: timestamp,
+              SK: `${timestamp}`,
             },
             UpdateExpression: `
               ADD #chainvolume :volume,

@@ -452,7 +452,7 @@ export class Collection {
     if (category) {
       return dynamodb
         .query({
-          IndexName: "collectionsIndex",
+          IndexName: process.env.COLLECTION_INDEX ?? "collectionsIndex",
           KeyConditionExpression: "category = :category",
           ExpressionAttributeValues: {
             ":category": category,

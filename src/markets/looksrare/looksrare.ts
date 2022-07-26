@@ -83,7 +83,7 @@ export default class LooksRareProvider
           address: currency,
           amount: price,
         },
-        price: price.toString(),
+        price: price,
         tokenID: tokenId.toString(),
         count: amount.toString(),
         data: {

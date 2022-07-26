@@ -35,8 +35,8 @@ export class OpenSeaProvider {
         }
         const providerConfig: MarketConfig = {
           chains: {
-            [chain]: chainConfig
-          }
+            [chain]: chainConfig,
+          },
         };
         providerConfig.chains[chain] = chainConfig;
         marketProviders.push(

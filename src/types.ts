@@ -107,6 +107,7 @@ export interface SaleData {
   marketplace: Marketplace;
   chain: Blockchain;
   metadata?: Record<string, any>;
+  count?: number;
 }
 
 export type HumanABI = string[] | string;

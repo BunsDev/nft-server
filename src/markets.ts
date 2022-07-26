@@ -30,7 +30,7 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
     chains: {
       [Blockchain.Ethereum]: [
         {
-          enabled: false,
+          enabled: true,
           provider: "wyvern",
           deployBlock: 14120913,
           contractAddress: "0x7f268357a8c2552623316e2562d90e642bb538e5",

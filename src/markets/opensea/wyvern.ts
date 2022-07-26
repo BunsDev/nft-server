@@ -137,8 +137,6 @@ export default class WyvernProvider
           });
         }
 
-        this.retrieveBlocks(fromBlock, toBlock, chain);
-
         try {
           const queryFilterStart = performance.now();
           const events: Array<Event> = (
@@ -166,6 +164,9 @@ export default class WyvernProvider
           );
 
           if (events.length) {
+            // Only download blocks for block
+            // ranges we have events for
+            this.retrieveBlocks(fromBlock, toBlock, chain);
             const result: Array<TxReceiptsWithMetadata> =
               await this.cluster.parallelizeMethod<
                 Event,

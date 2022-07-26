@@ -210,7 +210,7 @@ export default abstract class OpenSeaBaseProvider {
             retryCount++;
             LOGGER.error(`We failed to get block ${i}`);
             if (retryCount > 5) {
-              LOGGER.error(`We failed to get block ${i} after retrying`, {
+              LOGGER.alert(`We failed to get block ${i} after retrying`, {
                 fromBlock,
                 toBlock,
                 error: e,

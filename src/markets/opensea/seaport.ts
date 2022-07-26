@@ -16,6 +16,7 @@ import {
 } from "../../utils/metrics";
 import { ClusterWorker, IClusterProvider } from "../../utils/cluster";
 import OpenSeaBaseProvider from "./base";
+import dynamodb from "../../utils/dynamodb";
 
 const LOGGER = getLogger("SEAPORT_PROVIDER", {
   datadog: !!process.env.DATADOG_API_KEY,
@@ -36,6 +37,23 @@ enum ItemType {
   UNKNOWN = "unknown",
 }
 
+enum ItemTypeNumeric {
+  NATIVE = 0,
+  ERC20 = 1,
+  ERC721 = 2,
+  ERC1155 = 3,
+  UNKNOWN = -1,
+}
+
+enum OrderShape {
+  BID = "bid",
+  NATIVE = "native",
+  TOKEN = "token",
+  UNKNOWN = "unknown",
+}
+
+type TokenEventMetadataMap = Record<string, EventMetadata>;
+
 function getItemType(itemType: number): ItemType {
   switch (itemType) {
     case 0:
@@ -49,6 +67,10 @@ function getItemType(itemType: number): ItemType {
     default:
       return ItemType.UNKNOWN;
   }
+}
+
+function getSeaportShape(offer: any, consideration: any) {
+  return `${offer.map((o: any) => o.itemType)}:${consideration.map((c: any) => c.itemType)}`;
 }
 
 let MetricsReporter = DefaultMetricsReporter;
@@ -132,7 +154,7 @@ export default class SeaportProvider
             ? currentBlock
             : fromBlock + BLOCK_RANGE;
 
-        LOGGER.info("Searching blocks: ", {
+        LOGGER.debug("Searching blocks: ", {
           fromBlock,
           toBlock,
           range: toBlock - fromBlock,
@@ -146,8 +168,6 @@ export default class SeaportProvider
             retryCount,
           });
         }
-
-        this.retrieveBlocks(fromBlock, toBlock, chain);
 
         try {
           const queryFilterStart = performance.now();
@@ -171,13 +191,14 @@ export default class SeaportProvider
             queryFilterEnd - queryFilterStart
           );
 
-          LOGGER.info(
+          LOGGER.debug(
             `Found ${events.length} events between ${fromBlock} to ${toBlock}`
           );
 
-          LOGGER.info("Seaport Events", { fromBlock, toBlock, events });
+          LOGGER.debug("Seaport Events", { fromBlock, toBlock, events });
 
           if (events.length) {
+            this.retrieveBlocks(fromBlock, toBlock, chain);
             const blocks = (
               await Promise.all(this.getBlockList(fromBlock, toBlock))
             ).reduce(
@@ -269,61 +290,238 @@ export default class SeaportProvider
         });
         meta.push(null);
         continue;
-      } else if (
-        consideration.length < 2 ||
-        consideration.length > 3 ||
-        offer.length > 1
-      ) {
-        LOGGER.error(`Unexpected consideration/offer length`, {
-          tx: event.transactionHash,
-          considerationLen: consideration.length,
-          offerLen: offer.length,
-          offer,
-          consideration,
-          parsed,
-          event,
-        });
-        meta.push(null);
-        continue;
       }
 
-      const offerTokenType: ItemType = getItemType(offer[0].itemType);
-      const considerationTokenType: ItemType = getItemType(
-        consideration[consideration.length - 1].itemType
-      );
-      const price = consideration
-        .filter((c: any) => getItemType(c.itemType) === considerationTokenType)
-        .reduce((t: BigNumber, v: any) => t.add(v.amount), BigNumber.from(0));
-
-      let [buyer, seller, contractAddress] = [
-        recipient,
-        offerer,
-        offer[0].token,
-      ];
-      if (offerTokenType === ItemType.ERC20) {
-        buyer = consideration[0].recipient;
-        seller = recipient;
-        contractAddress = consideration[0].token;
-      }
-
-      meta.push({
-        buyer,
-        seller,
-        contractAddress,
-        data: {
-          offerType: offerTokenType,
-          raw: parsed.decodedData,
-          considerationType: considerationTokenType,
-        },
-        price,
-        payment: {
-          address: consideration[consideration.length - 1].token,
-          amount: price,
-        },
-        tokenID: consideration[consideration.length - 1].token,
-        eventSignatures: [parsed.log.signature],
+      const shape = getSeaportShape(offer, consideration);
+      dynamodb.put({
+        PK: "seaportShape",
+        SK: shape,
+        tx: event.transactionHash,
       });
+
+      const orderShape: OrderShape = this.getOrderShape(offer, consideration);
+      switch (orderShape) {
+        case OrderShape.BID:
+          meta.push(
+            ...this.getBidMeta(event, offer, consideration, offerer, recipient)
+          );
+          break;
+        case OrderShape.NATIVE:
+          meta.push(
+            ...this.getNativeMeta(
+              event,
+              offer,
+              consideration,
+              offerer,
+              recipient
+            )
+          );
+          break;
+        case OrderShape.TOKEN:
+          meta.push(
+            ...this.getTokenMeta(
+              event,
+              offer,
+              consideration,
+              offerer,
+              recipient
+            )
+          );
+          break;
+        case OrderShape.UNKNOWN:
+          meta.push(null);
+          break;
+      }
     }
     return meta;
+  }
+
+  public getOrderShape(offer: any, consideration: any): OrderShape {
+    // Shapes
+    // ERC20 : ERC721/1155+ , ERC20+?
+    // ERC721/1155+ : NATIVE+ , ERC721/1155+
+    // ERC721/1155+ : ERC20 , ERC721/1155+
+
+    const firstOfferType = offer[0].itemType;
+    const firstConsiderationType = consideration[0].itemType;
+
+    switch (true) {
+      case [ItemTypeNumeric.ERC721, ItemTypeNumeric.ERC1155].includes(
+        firstOfferType
+      ) && firstConsiderationType === ItemTypeNumeric.NATIVE:
+        return OrderShape.NATIVE;
+      case [ItemTypeNumeric.ERC721, ItemTypeNumeric.ERC1155].includes(
+        firstOfferType
+      ) && firstConsiderationType === ItemTypeNumeric.ERC20:
+        return OrderShape.TOKEN;
+      case firstOfferType === ItemTypeNumeric.ERC20:
+        return OrderShape.BID;
+      default:
+        return OrderShape.UNKNOWN;
+    }
+  }
+
+  public getBidMeta(
+    event: Event,
+    offer: any,
+    consideration: any,
+    offerer: string,
+    recipient: string
+  ): Array<EventMetadata> {
+    // Basic shape is ERC20 -> ERC721/1155+ , ERC20+?
+    return Object.values(
+      consideration
+        .filter((c: any) =>
+          [ItemTypeNumeric.ERC721, ItemTypeNumeric.ERC1155].includes(c.itemType)
+        )
+        .reduce((c: TokenEventMetadataMap, v: any) => {
+          if (!(v.token in c)) {
+            c[v.token] = {
+              buyer: v.recipient,
+              seller: recipient,
+              contractAddress: v.token,
+              data: [],
+              eventSignatures: [event.eventSignature],
+              payment: {
+                address: null,
+                amount: BigNumber.from(0),
+              },
+              price: BigNumber.from(0),
+              tokenID: null,
+              count: 0,
+            };
+          }
+          c[v.token] = {
+            ...c[v.token],
+            payment: {
+              address: offer[0].token,
+              amount: c[v.token].payment.amount.add(v.amount),
+            },
+            price: c[v.token].price.add(v.amount),
+            count: c[v.token].count++,
+            tokenID: v.identifier.toString(),
+            data: [
+              ...(c[v.token].data as any[]),
+              {
+                tokenID: v.identifier.toString(),
+                type: getItemType(v.itemType),
+                event,
+                offerer,
+                recipient,
+                offer,
+                consideration,
+              },
+            ],
+          };
+          return c;
+        }, {} as TokenEventMetadataMap)
+    );
+  }
+
+  public getNativeMeta(
+    event: Event,
+    offer: any,
+    consideration: any,
+    offerer: string,
+    recipient: string
+  ): Array<EventMetadata> {
+    // ERC721/1155+ : NATIVE+ , ERC721/1155+?
+    const price = this.getAmountTotal(consideration, ItemTypeNumeric.NATIVE);
+    return Object.values(
+      offer.reduce((c: TokenEventMetadataMap, v: any) => {
+        if (!(v.token in c)) {
+          c[v.token] = {
+            buyer: recipient,
+            seller: offerer,
+            contractAddress: v.token,
+            data: [],
+            eventSignatures: [event.eventSignature],
+            payment: {
+              address: consideration[0].token,
+              amount: price,
+            },
+            price,
+            tokenID: null,
+            count: 0,
+          };
+        }
+        c[v.token] = {
+          ...c[v.token],
+          count: c[v.token].count++,
+          tokenID: v.identifier.toString(),
+          data: [
+            ...(c[v.token].data as any[]),
+            {
+              tokenID: v.identifier.toString(),
+              type: getItemType(v.itemType),
+              event,
+              offerer,
+              recipient,
+              offer,
+              consideration,
+            },
+          ],
+        };
+        return c;
+      }, {} as TokenEventMetadataMap)
+    );
+  }
+
+  public getTokenMeta(
+    event: Event,
+    offer: any,
+    consideration: any,
+    offerer: string,
+    recipient: string
+  ): Array<EventMetadata> {
+    // ERC721/1155+ : ERC20 , ERC721/1155+?
+    const price = this.getAmountTotal(consideration, ItemTypeNumeric.NATIVE);
+    return Object.values(
+      offer.reduce((c: TokenEventMetadataMap, v: any) => {
+        if (!(v.token in c)) {
+          c[v.token] = {
+            buyer: recipient,
+            seller: offerer,
+            contractAddress: v.token,
+            data: [],
+            eventSignatures: [event.eventSignature],
+            payment: {
+              address: consideration[0].token,
+              amount: price,
+            },
+            price,
+            tokenID: null,
+            count: 0,
+          };
+        }
+        c[v.token] = {
+          ...c[v.token],
+          count: c[v.token].count++,
+          tokenID: v.identifier.toString(),
+          data: [
+            ...(c[v.token].data as any[]),
+            {
+              tokenID: v.identifier.toString(),
+              type: getItemType(v.itemType),
+              event,
+              offerer,
+              recipient,
+              offer,
+              consideration,
+            },
+          ],
+        };
+        return c;
+      }, {} as TokenEventMetadataMap)
+    );
+  }
+
+  public getAmountTotal(
+    amtArray: [amount: BigNumber],
+    type: ItemTypeNumeric
+  ): BigNumber {
+    return amtArray
+      .filter((a: any) => a.itemType === type)
+      .reduce((t: BigNumber, a: any) => t.add(a.amount), BigNumber.from(0));
   }
 }

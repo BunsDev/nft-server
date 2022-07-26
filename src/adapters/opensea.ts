@@ -205,7 +205,7 @@ async function runSales(provider: IMarketOnChainProvider): Promise<void> {
       Marketplace.Opensea,
       blockRange.endBlock,
       chain,
-      provider.CONTRACT_NAME,
+      provider.CONTRACT_NAME
     );
     nextSales = itSales.next();
   }

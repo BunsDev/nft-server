@@ -471,6 +471,7 @@ export class ClusterWorker implements IClusterWorker {
         break;
       }
       default: {
+        let dispatchResult;
         try {
           this.__state = WorkerState.BUSY;
           this.sendMessage({
@@ -482,7 +483,7 @@ export class ClusterWorker implements IClusterWorker {
               uuid,
             },
           });
-          const dispatchResult = await this.provider.dispatchWorkMethod(
+          dispatchResult = await this.provider.dispatchWorkMethod(
             method,
             data as Array<unknown>
           );
@@ -500,7 +501,13 @@ export class ClusterWorker implements IClusterWorker {
             },
           });
         } catch (e) {
-          this.LOGGER.error(`Worker Error`, { e, uuid, method });
+          this.LOGGER.error(`Worker Error`, {
+            e,
+            uuid,
+            method,
+            dispatchResult,
+            data,
+          });
         }
       }
     }

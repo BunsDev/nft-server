@@ -61,22 +61,14 @@ export class LlamaFi {
 }
 
 async function post(body: PostBody) {
-  console.log(JSON.stringify(body));
-  const req = axios.post(LLAMA_FI_COIN_API, body, {
+  const req = await axios.post(LLAMA_FI_COIN_API, body, {
     transformResponse: (data) => cacheResponse(body, data),
   });
-  try {
-    console.log(await req);
-  } catch (e) {
-    console.log(e);
-  }
-  console.log(req);
   return req;
 }
 
 function cacheResponse(request: PostBody, response: string) {
   const coinRes: CoinResponse = JSON.parse(response);
-  console.log(response);
   if ("message" in coinRes) {
     return coinRes;
   }

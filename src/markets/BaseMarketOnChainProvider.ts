@@ -36,6 +36,7 @@ export type EventMetadata = {
     amount: BigNumber;
   };
   data: Result | Record<string, any>;
+  count?: number;
 };
 export type ReceiptLike = {
   blockNumber: number;

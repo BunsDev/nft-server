@@ -21,7 +21,7 @@ export class Sale {
     marketplace,
     sales,
   }: {
-    slug: string;
+    slug: string | Record<string, any>;
     marketplace: Marketplace;
     sales: SaleData[];
   }) {
@@ -31,12 +31,16 @@ export class Sale {
         const items = sales
           .slice(i, i + batchWriteStep)
           .reduce((sales: any, sale) => {
+            let slugStr = slug;
+            if (!(typeof slugStr === "string")) {
+              slugStr = (<Record<string, any>>slug)[sale.contractAddress];
+            }
             const { timestamp, txnHash, ...data } = sale;
             const sortKeys = sales.map((sale: any) => sale.SK);
             const sortKey = `${timestamp}#txnHash#${txnHash}`;
             if (!sortKeys.includes(sortKey)) {
               sales.push({
-                PK: `sales#${slug}#marketplace#${marketplace}`,
+                PK: `sales#${slugStr}#marketplace#${marketplace}`,
                 SK: sortKey,
                 ...data,
               });

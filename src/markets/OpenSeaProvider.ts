@@ -19,8 +19,9 @@ import { MarketConfig } from "../markets";
 import { ChainProviders } from "../providers/OnChainProviderFactory";
 import { Blockchain, Marketplace } from "../types";
 import { AdapterState } from "../models";
-import { TransactionReceipt, Log } from "@ethersproject/providers";
+import { TransactionReceipt, Log, Block } from "@ethersproject/providers";
 import {
+  DEFAULT_TOKEN_ADDRESSES,
   IERC1155Standard,
   IERC20Standard,
   IERC721Standard,
@@ -36,6 +37,7 @@ import {
   ClusterWorker,
   IClusterProvider,
 } from "../utils/cluster";
+import { restoreBigNumber } from "../utils";
 
 const LOGGER = getLogger("OPENSEA_PROVIDER", {
   datadog: !!process.env.DATADOG_API_KEY,
@@ -49,9 +51,15 @@ const BLOCK_RANGE = process.env.EVENT_BLOCK_RANGE
   : 250;
 const EVENT_RECEIPT_PARALLELISM: number = process.env.EVENT_RECEIPT_PARALLELISM
   ? parseInt(process.env.EVENT_RECEIPT_PARALLELISM)
-  : 2;
+  : 4;
+const GET_BLOCK_PARALLELISM: number = process.env.GET_BLOCK_PARALLELISM
+  ? parseInt(process.env.GET_BLOCK_PARALLELISM)
+  : 5;
 
 let MetricsReporter = DefaultMetricsReporter;
+
+type BlockFn = () => Promise<Block>;
+type BlockPromise = BlockFn | Promise<Block>;
 
 /**
  * OS Market Chain Provider
@@ -96,6 +104,7 @@ export class OpenSeaProvider
   private __metricsInterval: NodeJS.Timer;
   private cluster: ClusterManager;
   private worker: ClusterWorker;
+  private blocks: Map<number, BlockPromise> = new Map();
 
   constructor(config: MarketConfig) {
     const { chains, contracts, interfaces, topics }: MarketProviders =
@@ -264,6 +273,8 @@ export class OpenSeaProvider
           });
         }
 
+        this.retrieveBlocks(fromBlock, toBlock, chain);
+
         try {
           const queryFilterStart = performance.now();
           const events: Array<Event> = (
@@ -327,7 +338,18 @@ export class OpenSeaProvider
               });
             }
 
+            const blocks = (
+              await Promise.all(this.getBlockList(fromBlock, toBlock))
+            ).reduce(
+              (m: Record<string, Block>, b: Block) => ({
+                ...m,
+                [b.number.toString()]: b,
+              }),
+              {} as Record<string, Block>
+            );
+
             yield {
+              blocks,
               chain,
               events,
               blockRange: {
@@ -367,6 +389,77 @@ export class OpenSeaProvider
             throw new Error(`Not able to recover from query errors`);
           }
         }
+      }
+    }
+  }
+
+  private getBlockList(
+    fromBlock: number,
+    toBlock: number
+  ): Array<Promise<Block>> {
+    const blockPromises: Array<Promise<Block>> = [];
+    for (let i = fromBlock; i <= toBlock; i++) {
+      let blockAt: BlockPromise = this.blocks.get(i);
+      if (typeof blockAt === "function") {
+        blockAt = blockAt();
+      }
+      blockPromises.push(blockAt);
+    }
+    return blockPromises;
+  }
+
+  private retrieveBlocks(
+    fromBlock: number,
+    toBlock: number,
+    chain: Blockchain
+  ) {
+    for (let i = fromBlock; i <= toBlock; i++) {
+      let running = false;
+      this.blocks.set(i, <BlockFn>(async () => {
+        if (running) {
+          LOGGER.warn(`Called once called getBlock ${i}`);
+          if (typeof this.blocks.get(i) === "function") {
+            return null;
+          }
+          return this.blocks.get(i);
+        }
+        running = true;
+        let retryCount = 0;
+        while (true) {
+          try {
+            this.blocks.set(i, this.chains[chain].provider.getBlock(i));
+            await this.blocks.get(i);
+
+            for (let j = i + 1; j <= toBlock; j++) {
+              const nextBlockFn = this.blocks.get(j);
+              if (typeof nextBlockFn !== "function") {
+                continue;
+              }
+              nextBlockFn();
+              break;
+            }
+            break;
+          } catch (e) {
+            retryCount++;
+            LOGGER.error(`We failed to get block ${i}`);
+            if (retryCount > 5) {
+              LOGGER.error(`We failed to get block ${i} after retrying`, {
+                fromBlock,
+                toBlock,
+                error: e,
+              });
+            }
+            continue;
+          }
+        }
+        return this.blocks.get(i);
+      }));
+    }
+
+    for (let i = fromBlock; i <= fromBlock + GET_BLOCK_PARALLELISM; i++) {
+      const blockFn = this.blocks.get(i);
+      if (typeof blockFn === "function") {
+        blockFn();
       }
     }
   }
@@ -497,6 +590,10 @@ export class OpenSeaProvider
       tokenID: null,
       price: originalPrice,
       data: null,
+      payment: {
+        address: DEFAULT_TOKEN_ADDRESSES[chain],
+        amount: BigNumber.from(0),
+      },
     };
 
     if (!originalPrice) {
@@ -529,9 +626,14 @@ export class OpenSeaProvider
         ERC721Logs,
         ERC1155Logs,
       } = this.reduceParsedLogs(relevantLogs));
-      const price = hasERC20
-        ? this.getERC20Price(ERC20Logs)
-        : eventMetadata.price;
+
+      eventMetadata.payment = this.getPaymentInfo(
+        hasERC20,
+        event,
+        eventLog,
+        ERC20Logs,
+        chain
+      );
       eventMetadata.eventSignatures = eventSigs;
 
       LOGGER.debug(`Found event index from ${parsedLogs.length} receipt logs`, {
@@ -614,6 +716,30 @@ export class OpenSeaProvider
     }
   }
 
+  public getPaymentInfo(
+    hasERC20: boolean,
+    event: Event,
+    eventLog: EventLogType,
+    ERC20Logs: EventLogType[],
+    chain: Blockchain
+  ): { address: string; amount: BigNumber } {
+    let address = DEFAULT_TOKEN_ADDRESSES[chain];
+    const amount = restoreBigNumber(eventLog.log.args[4]);
+
+    if (hasERC20) {
+      address = ERC20Logs[0].contract;
+      LOGGER.info(`Payment Info`, {
+        payment: { address, amount },
+        hasERC20: hasERC20 ? "true" : "false",
+        event,
+        eventLog,
+        ERC20Logs,
+      });
+    }
+
+    return { address, amount };
+  }
+
   public warnNonStandardEventLogs(
     eventIndex: number,
     event: Event,
@@ -623,10 +749,6 @@ export class OpenSeaProvider
       eventIndex,
       tx: event.transactionHash,
     });
-  }
-
-  public getERC20Price(logs: EventLogType[]): BigNumber {
-    return null;
   }
 
   public reduceParsedLogs(parsedRelevantLogs: EventLogType[]) {
@@ -659,6 +781,15 @@ export class OpenSeaProvider
         isERC721: false,
         isERC1155: false,
         hasERC20: false,
+      } as {
+        eventNames: Array<string>;
+        eventSigs: Array<string>;
+        ERC20Logs: Array<EventLogType>;
+        ERC721Logs: Array<EventLogType>;
+        ERC1155Logs: Array<EventLogType>;
+        isERC721: boolean;
+        isERC1155: boolean;
+        hasERC20: boolean;
       }
     );
   }

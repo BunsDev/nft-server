@@ -1,16 +1,18 @@
 import winston, { Logger } from "winston";
 
-type LogOptions = {
+interface LoggerConfigOptions {
   console?: boolean;
   error?: boolean;
   info?: boolean;
   debug?: boolean;
   datadog?: boolean;
+  debugTo?: Record<string, boolean>;
   format?: winston.Logform.Format;
   levels?: winston.config.AbstractConfigSetLevels;
   transports?: winston.transport[];
   path?: string;
-};
+  [x: string]: any;
+}
 
 export type TLogger = {
   [key: string]: (
@@ -20,27 +22,16 @@ export type TLogger = {
   ) => void;
 };
 
-type LoggerConfigOptions = {
-  console: boolean;
-  error: boolean;
-  info: boolean;
-  debug: boolean;
-  datadog: boolean;
-  format: any;
-  levels: {
-    [x: string]: number;
-  };
-  transports: any;
-  path: string;
-  [x: string]: any;
-};
-
 const _defaults: LoggerConfigOptions = {
   console: true,
   error: false,
   info: false,
   debug: false,
   datadog: false,
+  debugTo: {
+    console: false,
+    datadog: false,
+  },
   format: null,
   levels: {
     alert: 0,
@@ -65,13 +56,17 @@ export function configureLoggerDefaults(
   }
 }
 
-export function getLogger(name: string, options?: LogOptions): TLogger {
+export function getLogger(
+  name: string,
+  options?: LoggerConfigOptions
+): TLogger {
   const {
     console: _console = _defaults.console,
     error = _defaults.error,
     info = _defaults.info,
     debug = _defaults.debug,
     datadog = _defaults.datadog,
+    debugTo = _defaults.debugTo,
     format = _defaults.format,
     levels = _defaults.levels,
     transports = _defaults.transports,
@@ -83,7 +78,10 @@ export function getLogger(name: string, options?: LogOptions): TLogger {
     transports:
       transports ??
       [
-        _console && new winston.transports.Console(),
+        _console &&
+          new winston.transports.Console({
+            level: debugTo.console ? "debug" : "info",
+          }),
         error &&
           new winston.transports.File({
             filename: `${path}${name}.error.log`,
@@ -104,6 +102,7 @@ export function getLogger(name: string, options?: LogOptions): TLogger {
             host: `http-intake.logs.datadoghq.com`,
             path: `/api/v2/logs?dd-api-key=${process.env.DATADOG_API_KEY}&ddsource=nodejs&service=defillama-${name}`,
             ssl: true,
+            level: debugTo.datadog ? "debug" : "info",
           }),
       ].filter(Boolean),
   });

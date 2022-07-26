@@ -7,7 +7,7 @@ import { Blockchain, Marketplace } from "../types";
 import { BigNumber, Contract, ethers } from "ethers";
 import { MarketConfig, MarketChainsConfig } from "../markets";
 import { Interface, LogDescription } from "@ethersproject/abi";
-import { TransactionReceipt, Provider } from "@ethersproject/abstract-provider";
+import { TransactionReceipt, Block } from "@ethersproject/abstract-provider";
 import { EventFragment, Result } from "ethers/lib/utils";
 import { Event } from "ethers";
 
@@ -32,6 +32,10 @@ export type EventMetadata = {
   price: BigNumber;
   eventSignatures: string[];
   tokenID: string;
+  payment: {
+    address: string;
+    amount: BigNumber;
+  };
   data: Result;
 };
 export type TxReceiptsWithMetadata = Record<
@@ -49,6 +53,7 @@ export type ChainEvents = {
   };
   events: Array<Event>;
   receipts?: TxReceiptsWithMetadata;
+  blocks?: Record<string, Block>;
 };
 export type SaleEvents = Partial<Record<Blockchain, Array<ChainEvents>>>;
 export type SaleEventFragments = Partial<Record<Blockchain, EventFragment>>;

@@ -180,3 +180,5 @@ function reduceToEvents(record: Map<string, string>, abi: string) {
   record.set(abi.match(/^event\s(.[^()]+)/)[1], abi);
   return record;
 }
+
+export const LLAMA_FI_COIN_API = "https://coins.llama.fi/coin/timestamps";

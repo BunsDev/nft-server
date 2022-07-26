@@ -5,6 +5,8 @@ import { EthereumOnChainProvider } from "./EthereumOnChainProvider";
 import { ethers } from "ethers";
 import rpcAddresses from "../rpcAddresses.json";
 
+console.log(process.env.ETHEREUM_RPC);
+
 type Rpc = {
   address: Blockchain;
   chainId: number;

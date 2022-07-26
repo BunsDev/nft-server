@@ -24,17 +24,18 @@ const adapters: string[] = [
 ];
 
 const autoStartAdapters: Array<string> = [
-  "moralis",
-  "pancakeswap",
-  "random-earth",
-  "magic-eden",
-  "immutablex",
-  "treasure",
-  "jpg-store",
-  "nftrade",
-  "paintswap",
-  "defi-kingdoms",
-  "nftkey",
+  "opensea",
+  // "moralis",
+  // "pancakeswap",
+  // "random-earth",
+  // "magic-eden",
+  // "immutablex",
+  // "treasure",
+  // "jpg-store",
+  // "nftrade",
+  // "paintswap",
+  // "defi-kingdoms",
+  // "nftkey",
 ];
 
 const LOGGER = getLogger("OPENSEA_ADAPTER", {

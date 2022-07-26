@@ -7,7 +7,7 @@ import { Coingecko } from "../api/coingecko";
 import { CurrencyConverter } from "../api/currency-converter";
 import { COINGECKO_IDS } from "../constants";
 import { sleep, handleError, filterObject, restoreBigNumber } from "../utils";
-import { Blockchain, CollectionData, LowVolumeError, Marketplace } from "../types";
+import { Blockchain, CollectionData, LowVolumeError, Marketplace, SaleData } from "../types";
 import { OpenSea as OpenSeaMarketConfig } from "../markets";
 import { OpenSeaProvider } from "../markets/OpenSeaProvider";
 import { BigNumber, ethers } from "ethers";
@@ -74,7 +74,7 @@ async function runSales(): Promise<void> {
     marketplace: Marketplace.Opensea,
   });
 
-  const collectionMap = collections.reduce((m, c) => {
+  const collectionMap: Record<string, any> = collections.reduce((m, c) => {
     m[c.address] = c;
     return m;
   }, {});
@@ -86,29 +86,37 @@ async function runSales(): Promise<void> {
   let nextSales = itSales.next();
   // eslint-disable-next-line no-unreachable-loop
   while (!(await nextSales).done) {
-    const { chain, events, blockRange, receipts } = (await nextSales)
-      .value as ChainEvents;
+    const {
+      chain,
+      events,
+      blockRange,
+      receipts,
+      blocks: blockMap,
+    } = (await nextSales).value as ChainEvents;
     LOGGER.info(`Got ${events.length} sales`);
-    for (let i = 0; i < events.length; i++) {
-      const event = events[i];
 
-      if (!(event.transactionHash in receipts)) {
-        LOGGER.warn(`Missing receipt`, {
-          event,
-          blockRange,
-        });
-        continue;
-      }
+    if (!events.length) {
+      AdapterState.updateSalesLastSyncedBlockNumber(
+        Marketplace.Opensea,
+        blockRange.endBlock,
+        chain
+      );
+      nextSales = itSales.next();
+      continue;
+    }
 
-      const { meta: metas, receipt } = receipts[event.transactionHash];
+    const sales: Array<SaleData> = [];
+
+    for (const [hash, receiptWithMeta] of Object.entries(receipts)) {
+      const { meta: metas, receipt } = receiptWithMeta;
       if (!metas.length) {
         LOGGER.info(`Skipping ${receipt.transactionHash}`);
         continue;
       }
       for (const meta of metas) {
-        const { contractAddress, price, eventSignatures } = meta;
+        const { contractAddress, price, eventSignatures, data, payment } = meta;
         const formattedPrice = ethers.utils.formatUnits(
-          restoreBigNumber(price),
+          restoreBigNumber(payment.amount),
           "ether"
         );
         LOGGER.debug(
@@ -117,28 +125,74 @@ async function runSales(): Promise<void> {
           } for ${formattedPrice} ${chain}\n\t${eventSignatures.join("\n\t")}\n`,
           meta
         );
-        if (!contractAddress) continue;
-        Sale.insert({
-          slug: collectionMap[contractAddress]?.slug ?? contractAddress,
+        if (!contractAddress) {
+          LOGGER.debug(`Missing contract address. Skipping sale.`, {
+            hash,
+            metas,
+          });
+          continue;
+        }
+        sales.push({
+          txnHash: receipt.transactionHash,
+          timestamp: (
+            blockMap[receipt.blockNumber].timestamp * 1000
+          ).toString(),
+          paymentTokenAddress: payment.address,
+          contractAddress,
+          price: parseFloat(formattedPrice),
+          priceBase: null,
+          priceUSD: null,
+          sellerAddress: meta.seller,
+          buyerAddress: meta.buyer,
           marketplace: Marketplace.Opensea,
-          sales: [
-            {
-              txnHash: receipt.transactionHash,
-              timestamp: receipt.blockNumber.toString(),
-              paymentTokenAddress: null,
-              contractAddress,
-              price: parseFloat(formattedPrice),
-              priceBase: null,
-              priceUSD: null,
-              sellerAddress: meta.seller,
-              buyerAddress: meta.buyer,
-              marketplace: Marketplace.Opensea,
-              chain,
-            },
-          ],
+          chain,
+          metadata: { payment, data },
         });
       }
     }
+
+    try {
+      const convertedSales = await CurrencyConverter.convertSales(sales);
+
+      const salesInserted = await Sale.insert({
+        slug: collectionMap,
+        marketplace: Marketplace.Opensea,
+        sales: convertedSales,
+      });
+
+      if (salesInserted) {
+        const slugMap = convertedSales.reduce((slugs, sale) => {
+          const slug =
+            collectionMap[sale.contractAddress]?.slug ?? sale.contractAddress;
+          if (!(slug in slugs)) {
+            slugs[slug] = [];
+          }
+
+          slugs[slug].push(sale);
+
+          return slugs;
+        }, {} as Record<string, Array<SaleData>>);
+
+        for (const [slug, sales] of Object.entries(slugMap)) {
+          await HistoricalStatistics.updateStatistics({
+            slug,
+            chain: Blockchain.Ethereum,
+            marketplace: Marketplace.Opensea,
+            sales,
+          });
+        }
+      }
+    } catch (e) {
+      const hashes = sales.reduce((hashes, sale) => {
+        if (!(sale.paymentTokenAddress in hashes)) {
+          hashes[sale.paymentTokenAddress] = [];
+        }
+        hashes[sale.paymentTokenAddress].push(sale.txnHash);
+        return hashes;
+      }, {} as Record<string, Array<string>>);
+      LOGGER.error(`Sale error`, { error: e, sales, hashes });
+    }
+
     AdapterState.updateSalesLastSyncedBlockNumber(
       Marketplace.Opensea,
       blockRange.endBlock,

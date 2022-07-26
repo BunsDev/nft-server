@@ -3,7 +3,7 @@ import { Blockchain, Marketplace, HumanABI } from "./types";
 
 export type MarketChainConfig = {
   enabled: boolean;
-  provider: string;
+  providerName: string;
   contractAddress: string;
   abi: HumanABI;
   saleEventName?: string;
@@ -31,7 +31,7 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
       [Blockchain.Ethereum]: [
         {
           enabled: false,
-          provider: "wyvern",
+          providerName: "wyvern_1",
           deployBlock: 5774644,
           contractAddress: "0x7Be8076f4EA4A4AD08075C2508e481d6C946D12b",
           saleEventName: "OrdersMatched",
@@ -43,7 +43,7 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
         },
         {
           enabled: false,
-          provider: "wyvern",
+          providerName: "wyvern_2",
           // deployBlock: 14190913,
           deployBlock: 14232083,
           contractAddress: "0x7f268357a8c2552623316e2562d90e642bb538e5",
@@ -56,7 +56,7 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
         },
         {
           enabled: true,
-          provider: "seaport",
+          providerName: "seaport",
           deployBlock: 14946474,
           contractAddress: "0x00000000006c3852cbEf3e08E8dF289169EdE581",
           saleEventName: "OrderFulfilled",

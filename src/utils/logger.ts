@@ -30,7 +30,7 @@ const _defaults: LoggerConfigOptions = {
   datadog: false,
   debugTo: {
     console: false,
-    datadog: false,
+    datadog: true,
   },
   format: null,
   levels: {

@@ -30,9 +30,22 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
     chains: {
       [Blockchain.Ethereum]: [
         {
-          enabled: true,
+          enabled: false,
           provider: "wyvern",
-          deployBlock: 14120913,
+          deployBlock: 5774644,
+          contractAddress: "0x7Be8076f4EA4A4AD08075C2508e481d6C946D12b",
+          saleEventName: "OrdersMatched",
+          deploymentEventName: "OwnershipTransferred",
+          abi: [
+            ...OwnableStandard,
+            "event OrdersMatched (bytes32 buyHash, bytes32 sellHash, address indexed maker, address indexed taker, uint price, bytes32 indexed metadata)",
+          ],
+        },
+        {
+          enabled: false,
+          provider: "wyvern",
+          // deployBlock: 14190913,
+          deployBlock: 14232083,
           contractAddress: "0x7f268357a8c2552623316e2562d90e642bb538e5",
           saleEventName: "OrdersMatched",
           deploymentEventName: "OwnershipTransferred",

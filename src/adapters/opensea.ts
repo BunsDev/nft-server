@@ -37,41 +37,6 @@ if (cluster.isWorker) {
   OSProviders.forEach((p) => ClusterManager.create("OPENSEA", p));
 }
 
-async function runCollections(): Promise<void> {
-  const collections = await Contract.getAll(Blockchain.Ethereum);
-
-  if (collections.length === 0) {
-    LOGGER.info("No OpenSea collections to request...");
-    return;
-  }
-
-  const { usd: ethInUSD } = await Coingecko.getPricesById(
-    COINGECKO_IDS[Blockchain.Ethereum].geckoId
-  );
-
-  LOGGER.info("Fetching metadata for Opensea collections:", collections.length);
-
-  for (const collection of collections) {
-    try {
-      LOGGER.info(
-        "Fetching metadata for Opensea collection:",
-        collection?.name || "No name"
-      );
-      await fetchCollection(
-        collection.slug,
-        collection.address,
-        collection.defaultTokenId,
-        ethInUSD
-      );
-    } catch (e) {
-      if (e instanceof LowVolumeError) {
-        await Contract.remove(Blockchain.Ethereum, collection.address);
-      }
-      await handleError(e, "opensea-adapter:runCollections");
-    }
-  }
-}
-
 async function runSales(provider: IMarketOnChainProvider): Promise<void> {
   const { data: collections } = await Collection.getSorted({
     marketplace: Marketplace.Opensea,
@@ -127,12 +92,6 @@ async function runSales(provider: IMarketOnChainProvider): Promise<void> {
           restoreBigNumber(payment.amount),
           "ether"
         );
-        LOGGER.debug(
-          `Sale of ${contractAddress} from ${
-            receipt.transactionHash
-          } for ${formattedPrice} ${chain}\n\t${eventSignatures.join("\n\t")}\n`,
-          meta
-        );
         if (!contractAddress) {
           LOGGER.debug(`Missing contract address. Skipping sale.`, {
             hash,
@@ -155,6 +114,7 @@ async function runSales(provider: IMarketOnChainProvider): Promise<void> {
           marketplace: Marketplace.Opensea,
           chain,
           metadata: { payment, data },
+          count: meta.count,
         });
       }
     }
@@ -208,91 +168,6 @@ async function runSales(provider: IMarketOnChainProvider): Promise<void> {
       provider.CONTRACT_NAME
     );
     nextSales = itSales.next();
-  }
-}
-
-async function fetchCollection(
-  slug: string,
-  address: string,
-  tokenId: string,
-  ethInUSD: number
-) {
-  let fetchedSlug = "";
-  if (!slug) {
-    fetchedSlug = (await Opensea.getContract(address, tokenId)).slug;
-  }
-  const { metadata, statistics } = await Opensea.getCollection(
-    address,
-    slug || fetchedSlug,
-    ethInUSD
-  );
-  const filteredMetadata = filterObject(metadata) as CollectionData;
-
-  await Collection.upsert({
-    slug: slug || fetchedSlug,
-    metadata: filteredMetadata,
-    statistics,
-    chain: Blockchain.Ethereum,
-    marketplace: Marketplace.Opensea,
-  });
-}
-
-async function fetchSales(collection: Collection): Promise<void> {
-  let offset = 0;
-  const limit = 300;
-  const slug = collection.slug;
-  const lastSaleTime = await Sale.getLastSaleTime({
-    slug,
-    marketplace: Marketplace.Opensea,
-  });
-
-  while (offset <= 10000) {
-    try {
-      const sales = await Opensea.getSales(
-        collection.address,
-        lastSaleTime,
-        offset,
-        limit
-      );
-      const filteredSales = sales.filter((sale) => sale);
-
-      if (filteredSales.length === 0) {
-        sleep(3);
-        return;
-      }
-
-      const convertedSales = await CurrencyConverter.convertSales(
-        filteredSales
-      );
-
-      const salesInserted = await Sale.insert({
-        slug,
-        marketplace: Marketplace.Opensea,
-        sales: convertedSales,
-      });
-
-      if (salesInserted) {
-        await HistoricalStatistics.updateStatistics({
-          slug,
-          chain: Blockchain.Ethereum,
-          marketplace: Marketplace.Opensea,
-          sales: convertedSales,
-        });
-      }
-      offset += limit;
-      await sleep(1);
-    } catch (e) {
-      if (axios.isAxiosError(e)) {
-        if (e.response.status === 500) {
-          console.error(
-            "Error [opensea-adapter:fetchSales]: offset not valid or server error"
-          );
-          break;
-        }
-      }
-      await handleError(e, "opensea-adapter:fetchSales");
-      continue;
-    }
   }
 }
 

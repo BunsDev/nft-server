@@ -40,7 +40,9 @@ export class Sale {
             const sortKey = `${timestamp}#txnHash#${txnHash}`;
             if (!sortKeys.includes(sortKey)) {
               sales.push({
-                PK: `sales#${slugStr}#marketplace#${marketplace}`,
+                PK: `sales#${
+                  slugStr || sale.contractAddress
+                }#marketplace#${marketplace}`,
                 SK: sortKey,
                 ...data,
               });

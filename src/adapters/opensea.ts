@@ -15,6 +15,7 @@ import { ChainEvents } from "../markets/BaseMarketOnChainProvider";
 import { getLogger, configureLoggerDefaults } from "../utils/logger";
 import { ClusterManager, ClusterWorker } from "../utils/cluster";
 import cluster from "cluster";
+import { IMarketOnChainProvider } from "../interfaces";
 
 configureLoggerDefaults({
   error: false,
@@ -26,12 +27,14 @@ const LOGGER = getLogger("OPENSEA_ADAPTER", {
   datadog: !!process.env.DATADOG_API_KEY,
 });
 
-const OSProvider = new OpenSeaProvider(OpenSeaMarketConfig);
+const OSProviders = OpenSeaProvider.build(OpenSeaMarketConfig);
 
 if (cluster.isWorker) {
-  ClusterWorker.create(process.env.WORKER_UUID, "OPENSEA", OSProvider);
+  OSProviders.forEach((p) =>
+    ClusterWorker.create(process.env.WORKER_UUID, "OPENSEA", p)
+  );
 } else {
-  ClusterManager.create("OPENSEA", OSProvider);
+  OSProviders.forEach((p) => ClusterManager.create("OPENSEA", p));
 }
 
 async function runCollections(): Promise<void> {
@@ -69,7 +72,7 @@ async function runCollections(): Promise<void> {
   }
 }
 
-async function runSales(): Promise<void> {
+async function runSales(provider: IMarketOnChainProvider): Promise<void> {
   const { data: collections } = await Collection.getSorted({
     marketplace: Marketplace.Opensea,
   });
@@ -81,7 +84,7 @@ async function runSales(): Promise<void> {
 
   LOGGER.info("Fetching sales for OpenSea collections:", collections.length);
 
-  const itSales = OSProvider.fetchSales();
+  const itSales = provider.fetchSales();
   // eslint-disable-next-line prefer-const
   let nextSales = itSales.next();
   // eslint-disable-next-line no-unreachable-loop
@@ -99,7 +102,8 @@ async function runSales(): Promise<void> {
       AdapterState.updateSalesLastSyncedBlockNumber(
         Marketplace.Opensea,
         blockRange.endBlock,
-        chain
+        chain,
+        provider.CONTRACT_NAME,
       );
       nextSales = itSales.next();
       continue;
@@ -114,6 +118,10 @@ async function runSales(): Promise<void> {
         continue;
       }
       for (const meta of metas) {
+        if (!meta) {
+          LOGGER.error(`Skipping meta`, { tx: receipt.transactionHash });
+          continue;
+        }
         const { contractAddress, price, eventSignatures, data, payment } = meta;
         const formattedPrice = ethers.utils.formatUnits(
           restoreBigNumber(payment.amount),
@@ -152,16 +160,16 @@ async function runSales(): Promise<void> {
     }
 
     try {
-      const convertedSales = await CurrencyConverter.convertSales(sales);
+      await CurrencyConverter.matchSalesWithPrices(sales);
 
       const salesInserted = await Sale.insert({
         slug: collectionMap,
         marketplace: Marketplace.Opensea,
-        sales: convertedSales,
+        sales,
       });
 
       if (salesInserted) {
-        const slugMap = convertedSales.reduce((slugs, sale) => {
+        const slugMap = sales.reduce((slugs, sale) => {
           const slug =
             collectionMap[sale.contractAddress]?.slug ?? sale.contractAddress;
           if (!(slug in slugs)) {
@@ -196,7 +204,8 @@ async function runSales(): Promise<void> {
     AdapterState.updateSalesLastSyncedBlockNumber(
       Marketplace.Opensea,
       blockRange.endBlock,
-      chain
+      chain,
+      provider.CONTRACT_NAME,
     );
     nextSales = itSales.next();
   }
@@ -287,10 +296,10 @@ async function fetchSales(collection: Collection): Promise<void> {
   }
 }
 
-async function run(): Promise<void> {
+async function run(provider: IMarketOnChainProvider): Promise<void> {
   try {
     while (true) {
-      await Promise.all([/* runCollections(), */ runSales()]);
+      await Promise.all([/* runCollections(), */ runSales(provider)]);
       await sleep(60 * 60);
     }
   } catch (e) {
@@ -301,7 +310,7 @@ async function run(): Promise<void> {
 const OpenseaAdapter: DataAdapter = { run };
 
 if (cluster.isPrimary) {
-  OpenseaAdapter.run();
+  OSProviders.forEach(p => OpenseaAdapter.run(p));
 }
 
 export default OpenseaAdapter;

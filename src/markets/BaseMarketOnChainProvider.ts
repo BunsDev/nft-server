@@ -4,12 +4,11 @@ import {
 } from "../providers/OnChainProviderFactory";
 import { IOnChainProvider, MarketChainProviders } from "../interfaces";
 import { Blockchain, Marketplace } from "../types";
-import { BigNumber, Contract, ethers } from "ethers";
+import { BigNumber, Contract, ethers, Event } from "ethers";
 import { MarketConfig, MarketChainsConfig } from "../markets";
 import { Interface, LogDescription } from "@ethersproject/abi";
 import { TransactionReceipt, Block } from "@ethersproject/abstract-provider";
 import { EventFragment, Result } from "ethers/lib/utils";
-import { Event } from "ethers";
 
 export enum LogType {
   ERC721 = "erc721",
@@ -36,12 +35,16 @@ export type EventMetadata = {
     address: string;
     amount: BigNumber;
   };
-  data: Result;
+  data: Result | Record<string, any>;
+};
+export type ReceiptLike = {
+  blockNumber: number;
+  transactionHash: string;
 };
 export type TxReceiptsWithMetadata = Record<
   string,
   {
-    receipt: TransactionReceipt;
+    receipt?: TransactionReceipt | ReceiptLike;
     meta: EventMetadata[];
   }
 >;

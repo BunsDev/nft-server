@@ -56,7 +56,8 @@ export class AdapterState {
   static async createSalesAdapterState(
     marketplace: Marketplace,
     chain: Blockchain = Blockchain.Ethereum,
-    startBlock = EARLIEST_BLOCK
+    startBlock = EARLIEST_BLOCK,
+    contract?: string
   ) {
     if (!startBlock) {
       startBlock = EARLIEST_BLOCK;
@@ -64,7 +65,9 @@ export class AdapterState {
 
     await dynamodb.put({
       PK: `adapterState`,
-      SK: `sales#chain#${chain}#marketplace#${marketplace}`,
+      SK: `sales#chain#${chain}#marketplace#${marketplace}${
+        contract ? "-" + contract : ""
+      }`,
       lastSyncedBlockNumber: startBlock,
     });
 
@@ -77,14 +80,17 @@ export class AdapterState {
     marketplace: Marketplace,
     chain: Blockchain = Blockchain.Ethereum,
     createIfMissing = false,
-    defaultBlock?: number
+    defaultBlock?: number,
+    contract?: string
   ) {
     return dynamodb
       .query({
         KeyConditionExpression: "PK = :pk and SK = :sk",
         ExpressionAttributeValues: {
           ":pk": "adapterState",
-          ":sk": `sales#chain#${chain}#marketplace#${marketplace}`,
+          ":sk": `sales#chain#${chain}#marketplace#${marketplace}${
+            contract ? "-" + contract : ""
+          }`,
         },
       })
       .then((result) => {
@@ -95,7 +101,8 @@ export class AdapterState {
           return AdapterState.createSalesAdapterState(
             marketplace,
             chain,
-            defaultBlock
+            defaultBlock,
+            contract
           );
         }
       });
@@ -104,12 +111,15 @@ export class AdapterState {
   static async updateSalesLastSyncedBlockNumber(
     marketplace: Marketplace,
     blockNumber: number,
-    chain: Blockchain = Blockchain.Ethereum
+    chain: Blockchain = Blockchain.Ethereum,
+    contract?: string
   ) {
     return dynamodb.update({
       Key: {
         PK: `adapterState`,
-        SK: `sales#chain#${chain}#marketplace#${marketplace}`,
+        SK: `sales#chain#${chain}#marketplace#${marketplace}${
+          contract ? "-" + contract : ""
+        }`,
       },
       UpdateExpression: "SET lastSyncedBlockNumber = :blockNumber",
       ExpressionAttributeValues: {

@@ -36,7 +36,7 @@ export class CurrencyConverter {
       );
 
       if (!data.length) {
-        throw "Error";
+        throw new Error("Error");
       }
 
       return data;
@@ -213,7 +213,8 @@ export class CurrencyConverter {
           sale.paymentTokenAddress ?? DEFAULT_TOKEN_ADDRESSES[sale.chain];
         if (!c.timestamps.includes(t)) c.timestamps.push(t);
         if (!(sale.chain in c.addresses)) c.addresses[sale.chain] = [];
-        if (!c.addresses[sale.chain].includes(address)) c.addresses[sale.chain].push(address);
+        if (!c.addresses[sale.chain].includes(address))
+          c.addresses[sale.chain].push(address);
         return c;
       },
       { timestamps: [], addresses: {} } as {
@@ -221,6 +222,10 @@ export class CurrencyConverter {
         addresses: Record<string, string[]>;
       }
     );
+    const timestampMap = uniqueAddressesTimestamps.timestamps.reduce((c, t) => {
+      c[t] = Math.round(t / 1000);
+      return c;
+    }, {} as Record<number, number>);
 
     LOGGER.info(`UniqueAddresses`, { uniqueAddressesTimestamps });
     LOGGER.info(`Chains`, {
@@ -233,7 +238,7 @@ export class CurrencyConverter {
         try {
           const saleTokenPrices = await LlamaFi.getHistoricPricesByContract(
             address,
-            uniqueAddressesTimestamps.timestamps,
+            Object.values(timestampMap),
             chain
           );
           LOGGER.info(`Sale token prices`, { chain, address, saleTokenPrices });
@@ -241,7 +246,11 @@ export class CurrencyConverter {
           prices[chain][address] = saleTokenPrices;
         } catch (e) {
           console.log(e);
-          LOGGER.error(`LlamaFi error`, { e });
+          LOGGER.error(`LlamaFi error`, {
+            e,
+            address,
+            sale: sales.find((s) => s.paymentTokenAddress === address),
+          });
         }
       }
     }
@@ -249,9 +258,10 @@ export class CurrencyConverter {
     LOGGER.info(`LlamaFi Prices`, { prices });
 
     for (const sale of sales) {
-      sale.priceUSD =
+      const t = parseInt(sale.timestamp);
+      sale.priceBase = sale.priceUSD =
         sale.price *
-        prices[sale.chain][sale.paymentTokenAddress][parseInt(sale.timestamp)];
+        prices[sale.chain][sale.paymentTokenAddress][timestampMap[t]];
       LOGGER.info(`Convert sale price`, {
         price: sale.price,
         USD: sale.priceUSD,

@@ -17,6 +17,7 @@ export type MarketChainProviders = Blockchain[];
 
 export interface IMarketOnChainProvider {
   // Public
+  CONTRACT_NAME: string;
   chains: ChainProviders;
   contracts: ContractInstances;
   interfaces: AbiInterfaces;
@@ -25,7 +26,7 @@ export interface IMarketOnChainProvider {
   config: MarketConfig;
 
   // Methods
-  fetchSales(): void;
+  fetchSales(): AsyncGenerator<any>;
   getEventReceipts(
     events: Array<Event>,
     chain: Blockchain

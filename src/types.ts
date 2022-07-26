@@ -109,7 +109,7 @@ export interface SaleData {
   metadata?: Record<string, any>;
 }
 
-export type HumanABI = string[];
+export type HumanABI = string[] | string;
 
 export type ERCStandard = {
   abi: HumanABI;

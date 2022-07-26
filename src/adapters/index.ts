@@ -1,9 +1,10 @@
 import { fork } from "child_process";
+import { IMarketOnChainProvider } from "../interfaces";
 import { getLogger } from "../utils/logger";
 require("dotenv").config();
 
 export interface DataAdapter {
-  run: () => Promise<void>;
+  run: (provider?: IMarketOnChainProvider) => Promise<void>;
 }
 
 declare const __dirname: string;

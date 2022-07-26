@@ -17,6 +17,7 @@ import {
 import { ClusterWorker, IClusterProvider } from "../../utils/cluster";
 import OpenSeaBaseProvider from "./base";
 import dynamodb from "../../utils/dynamodb";
+import BaseProvider from "../BaseProvider";
 
 const LOGGER = getLogger("SEAPORT_PROVIDER", {
   datadog: !!process.env.DATADOG_API_KEY,
@@ -76,10 +77,11 @@ function getSeaportShape(offer: any, consideration: any) {
 }
 
 export default class SeaportProvider
-  extends OpenSeaBaseProvider
+  extends BaseProvider
   implements IMarketOnChainProvider, IClusterProvider
 {
   public CONTRACT_NAME = "seaport";
+  public market = Marketplace.Opensea;
 
   public withWorker(worker: ClusterWorker): void {
     super.withWorker(worker);

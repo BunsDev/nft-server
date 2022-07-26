@@ -16,6 +16,7 @@ import { customMetricsReporter } from "../../utils/metrics";
 import { ClusterWorker, IClusterProvider } from "../../utils/cluster";
 import { restoreBigNumber } from "../../utils";
 import OpenSeaBaseProvider from "./base";
+import BaseProvider from "../BaseProvider";
 
 const LOGGER = getLogger("OPENSEA_PROVIDER", {
   datadog: !!process.env.DATADOG_API_KEY,
@@ -36,9 +37,11 @@ const EVENT_RECEIPT_PARALLELISM: number = process.env.EVENT_RECEIPT_PARALLELISM
  */
 
 export default class WyvernProvider
-  extends OpenSeaBaseProvider
+  extends BaseProvider
   implements IMarketOnChainProvider, IClusterProvider
 {
+  public market = Marketplace.Opensea;
+
   public withWorker(worker: ClusterWorker): void {
     super.withWorker(worker);
     this.MetricsReporter = customMetricsReporter("", "", [

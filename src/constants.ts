@@ -40,6 +40,7 @@ export const MARKETPLACE_CHAINS: Record<Marketplace, Blockchain[]> = {
   [Marketplace.DefiKingdoms]: [Blockchain.Harmony],
   [Marketplace.NFTrade]: [Blockchain.Avalanche],
   [Marketplace.Opensea]: [Blockchain.Ethereum],
+  [Marketplace.LooksRare]: [Blockchain.Ethereum],
   [Marketplace.PancakeSwap]: [Blockchain.BSC],
   [Marketplace.NFTKEY]: [
     Blockchain.Fantom,
@@ -59,7 +60,11 @@ export const CHAIN_MARKETPLACES: Record<Blockchain, Marketplace[]> = {
   [Blockchain.Fantom]: [Marketplace.PaintSwap, Marketplace.NFTKEY],
   [Blockchain.Harmony]: [Marketplace.DefiKingdoms, Marketplace.NFTKEY],
   [Blockchain.Avalanche]: [Marketplace.NFTrade, Marketplace.NFTKEY],
-  [Blockchain.Ethereum]: [Marketplace.Opensea, Marketplace.NFTKEY],
+  [Blockchain.Ethereum]: [
+    Marketplace.Opensea,
+    Marketplace.NFTKEY,
+    Marketplace.LooksRare,
+  ],
   [Blockchain.BSC]: [Marketplace.PancakeSwap, Marketplace.NFTKEY],
 };
 

@@ -68,8 +68,37 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
       ],
     },
   },
+  [Marketplace.LooksRare]: {
+    chains: {
+      [Blockchain.Ethereum]: [
+        {
+          enabled: true,
+          providerName: "looksrare_bid",
+          deployBlock: 13885625,
+          contractAddress: "0x59728544B08AB483533076417FbBB2fD0B17CE3a",
+          saleEventName: "TakerBid",
+          deploymentEventName: "OwnershipTransferred",
+          abi: [
+            "event TakerBid(bytes32 orderHash, uint256 orderNonce, address indexed taker, address indexed maker, address indexed strategy, address currency, address collection, uint256 tokenId, uint256 amount, uint256 price)",
+          ],
+        },
+        {
+          enabled: true,
+          providerName: "looksrare_ask",
+          deployBlock: 13885625,
+          contractAddress: "0x59728544B08AB483533076417FbBB2fD0B17CE3a",
+          saleEventName: "TakerAsk",
+          deploymentEventName: "OwnershipTransferred",
+          abi: [
+            "event TakerAsk(bytes32 orderHash, uint256 orderNonce, address indexed taker, address indexed maker, address indexed strategy, address currency, address collection, uint256 tokenId, uint256 amount, uint256 price)",
+          ],
+        },
+      ],
+    },
+  },
 };
 
 export const OpenSea = markets[Marketplace.Opensea];
+export const LooksRare = markets[Marketplace.LooksRare];
 
 export default markets;

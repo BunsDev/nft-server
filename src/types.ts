@@ -25,6 +25,7 @@ export enum AdapterType {
 }
 
 export enum Marketplace {
+  LooksRare = "looksrare",
   Opensea = "opensea",
   MagicEden = "magiceden",
   ImmutableX = "immutablex",

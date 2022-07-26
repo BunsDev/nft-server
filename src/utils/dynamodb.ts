@@ -16,7 +16,7 @@ export function getClient(
           region: "local",
         }
       : {
-          region: "us-east-2", // For running the adapters locally but using the prod DB
+          region: process.env.AWS_REGION ?? "us-east-2", // For running the adapters locally but using the prod DB
         };
   }
   return new AWS.DynamoDB.DocumentClient(config);

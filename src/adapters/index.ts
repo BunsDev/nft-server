@@ -13,6 +13,7 @@ const adapters: string[] = [
   "moralis",
   "pancakeswap",
   "opensea",
+  "looksrare",
   "random-earth",
   "magic-eden",
   "immutablex",
@@ -26,6 +27,7 @@ const adapters: string[] = [
 
 const autoStartAdapters: Array<string> = [
   "opensea",
+  "looksrare",
   // "moralis",
   // "pancakeswap",
   // "random-earth",

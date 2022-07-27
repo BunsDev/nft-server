@@ -212,17 +212,16 @@ if (!process.argv[2]) {
 } else if (process.argv[2] === "provider-child") {
   const LRProviders = LooksRareProvider.build(LooksRareMarketConfig);
   const providerName = process.argv[3];
-  const provider = LRProviders.find(
+  const config = LRProviders.find(
     (p) => p.chainConfig.providerName === providerName
-  ).instantiate();
-  if (cluster.isWorker) {
-    ClusterWorker.create(
-      process.env.WORKER_UUID,
-      `LOOKSRARE_${providerName}`,
-      provider
-    );
-  } else {
-    ClusterManager.create(`LOOKSRARE_${providerName}`, provider);
+  );
+  const provider = config.instantiate();
+  if (cluster.isWorker && config.chainConfig.cluster) {
+    ClusterWorker.create(process.env.WORKER_UUID, `LOOKSRARE`, provider);
+  } else if (cluster.isPrimary) {
+    if (config.chainConfig.cluster) {
+      ClusterManager.create(`LOOKSRARE`, provider);
+    }
     LooksRareAdapter.run(provider);
   }
 }

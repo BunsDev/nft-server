@@ -10,12 +10,8 @@ import {
 import { Blockchain, Marketplace } from "../../types";
 import { AdapterState } from "../../models";
 import { Block } from "@ethersproject/providers";
-import {
-  MetricsReporter as DefaultMetricsReporter,
-  customMetricsReporter,
-} from "../../utils/metrics";
+import { customMetricsReporter } from "../../utils/metrics";
 import { ClusterWorker, IClusterProvider } from "../../utils/cluster";
-import OpenSeaBaseProvider from "./base";
 import dynamodb from "../../utils/dynamodb";
 import BaseProvider from "../BaseProvider";
 

@@ -40,6 +40,7 @@ export class OpenSeaProvider {
         };
         providerConfig.chains[chain] = chainConfig;
         marketProviders.push({
+          chain,
           providerConfig,
           chainConfig,
           instantiate() {

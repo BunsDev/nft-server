@@ -27,6 +27,7 @@ import {
 import cluster from "cluster";
 import { IMarketOnChainProvider } from "../interfaces";
 import { fork } from "child_process";
+import BaseProvider from "../markets/BaseProvider";
 
 type AdapterProvider = IMarketOnChainProvider & IClusterProvider;
 type AdapterProviderConfig = {
@@ -213,17 +214,16 @@ if (!process.argv[2]) {
 } else if (process.argv[2] === "provider-child") {
   const OSProviders = OpenSeaProvider.build(OpenSeaMarketConfig);
   const providerName = process.argv[3];
-  const provider = OSProviders.find(
+  const config = OSProviders.find(
     (p) => p.chainConfig.providerName === providerName
-  ).instantiate();
-  if (cluster.isWorker) {
-    ClusterWorker.create(
-      process.env.WORKER_UUID,
-      `OPENSEA_${providerName}`,
-      provider
-    );
-  } else {
-    ClusterManager.create(`OPENSEA_${providerName}`, provider);
+  );
+  const provider = config.instantiate();
+  if (cluster.isWorker && config.chainConfig.cluster) {
+    ClusterWorker.create(process.env.WORKER_UUID, `OPENSEA`, provider);
+  } else if (cluster.isPrimary) {
+    if (config.chainConfig.cluster) {
+      ClusterManager.create(`OPENSEA`, provider);
+    }
     OpenseaAdapter.run(provider);
   }
 }

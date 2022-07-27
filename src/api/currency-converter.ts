@@ -1,7 +1,11 @@
 import axios from "axios";
 import { getLogger } from "../utils/logger";
 import { Coingecko } from "../api/coingecko";
-import { DEFAULT_TOKEN_ADDRESSES, COINGECKO_IDS } from "../constants";
+import {
+  DEFAULT_TOKEN_ADDRESSES,
+  WRAPPED_BASE_TOKENS,
+  COINGECKO_IDS,
+} from "../constants";
 import { Blockchain, SaleData } from "../types";
 import { handleError, getPriceAtDate, roundUSD } from "../utils";
 import { LlamaFi, CoinResponse, PRICE_CACHE } from "./llamafi";
@@ -23,6 +27,13 @@ export class CurrencyConverter {
 
   private static lastCachedTime: Date = new Date();
   private static tokenAddressPrices: Record<string, number[][]> = {};
+
+  public static isWrappedBaseToken(
+    address: string,
+    chain = Blockchain.Ethereum
+  ) {
+    return WRAPPED_BASE_TOKENS[chain] === address;
+  }
 
   public static async getHistoricalPricesByChainAndAddress(
     chain: Blockchain,
@@ -267,18 +278,29 @@ export class CurrencyConverter {
       if (
         CurrencyConverter.BASE_TOKENS_ADDRESSES.includes(
           sale.paymentTokenAddress
+        ) ||
+        CurrencyConverter.isWrappedBaseToken(
+          sale.paymentTokenAddress,
+          sale.chain
         )
       ) {
-        sale.priceBase = sale.price;
         sale.priceUSD = roundUSD(
           sale.price *
             prices[sale.chain][sale.paymentTokenAddress][timestampMap[t]]
         );
-        continue;
+      } else {
+        sale.priceUSD =
+          sale.price *
+          prices[sale.chain][sale.paymentTokenAddress][timestampMap[t]];
+        const chainBasePriceAtTimestamp =
+          await LlamaFi.getHistoricPriceByContract(
+            DEFAULT_TOKEN_ADDRESSES[sale.chain as Blockchain],
+            timestampMap[t],
+            sale.chain
+          );
+        sale.price = sale.priceUSD / chainBasePriceAtTimestamp[timestampMap[t]];
+        sale.priceBase = sale.price;
       }
-      sale.priceBase = sale.priceUSD =
-        sale.price *
-        prices[sale.chain][sale.paymentTokenAddress][timestampMap[t]];
 
       LOGGER.debug(`Convert sale price`, {
         price: sale.price,

@@ -101,8 +101,8 @@ export interface SaleData {
   paymentTokenAddress: string;
   contractAddress?: string;
   price: number;
-  priceBase: number;
-  priceUSD: number;
+  priceBase: number | null;
+  priceUSD: number | null;
   sellerAddress: string;
   buyerAddress: string;
   marketplace: Marketplace;

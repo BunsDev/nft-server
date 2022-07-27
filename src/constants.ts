@@ -17,6 +17,10 @@ export const DEFAULT_TOKEN_ADDRESSES: Record<Blockchain, string> = {
   [Blockchain.Harmony]: "one:0x0000000000000000000000000000000000000000",
 };
 
+export const WRAPPED_BASE_TOKENS: Partial<Record<Blockchain, string>> = {
+  [Blockchain.Ethereum]: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+};
+
 export const MORALIS_CHAINS: Record<Blockchain, MoralisChain> = {
   [Blockchain.Solana]: MoralisChain.None,
   [Blockchain.ImmutableX]: MoralisChain.None,

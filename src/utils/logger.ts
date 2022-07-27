@@ -60,6 +60,9 @@ export function getLogger(
   name: string,
   options?: LoggerConfigOptions
 ): TLogger {
+  if (process.argv[3]) {
+    name = `${name}_${process.argv[3]}`;
+  }
   const {
     console: _console = _defaults.console,
     error = _defaults.error,
@@ -119,7 +122,10 @@ export function getLogger(
       ...winston: Array<unknown>
     ) {
       const timestamp = Date.now();
-      _logger[_level]({ timestamp, message, meta }, ...winston);
+      _logger[_level](
+        { timestamp, message, meta, pid: process.pid },
+        ...winston
+      );
     };
   }
 

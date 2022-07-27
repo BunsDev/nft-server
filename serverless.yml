@@ -76,10 +76,11 @@ provider:
     OPENSEARCH_DOMAIN: ${file(./env.js):OPENSEARCH_DOMAIN}
     OPENSEARCH_USERNAME: ${file(./env.js):OPENSEARCH_USERNAME}
     OPENSEARCH_PASSWORD: ${file(./env.js):OPENSEARCH_PASSWORD}
+    TABLE_NAME: ${self:custom.tableName}
 
 custom:
   stage: ${opt:stage, self:provider.stage}
-  tableName: ${self:custom.stage}-nft-table
+  tableName: ${file(./env.js):TABLE_NAME}
   tableArn: ${file(./env.js):TABLE_ARN}
   tableIndexArn: ${file(./env.js):TABLE_INDEX_ARN}
   streamArn: ${file(./env.js):STREAM_ARN}

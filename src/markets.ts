@@ -10,6 +10,7 @@ export type MarketChainConfig = {
   saleTopic?: string;
   deploymentEventName: string;
   deployBlock?: number;
+  cluster: boolean;
 };
 
 export type MarketChainsConfig = Partial<Record<Blockchain, MarketChainConfig>>;
@@ -30,7 +31,8 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
     chains: {
       [Blockchain.Ethereum]: [
         {
-          enabled: false,
+          enabled: true,
+          cluster: true,
           providerName: "wyvern_1",
           deployBlock: 5774644,
           contractAddress: "0x7Be8076f4EA4A4AD08075C2508e481d6C946D12b",
@@ -42,7 +44,8 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
           ],
         },
         {
-          enabled: false,
+          enabled: true,
+          cluster: true,
           providerName: "wyvern_2",
           // deployBlock: 14190913,
           deployBlock: 14232083,
@@ -56,6 +59,7 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
         },
         {
           enabled: true,
+          cluster: false,
           providerName: "seaport",
           deployBlock: 14946474,
           contractAddress: "0x00000000006c3852cbEf3e08E8dF289169EdE581",
@@ -73,6 +77,7 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
       [Blockchain.Ethereum]: [
         {
           enabled: true,
+          cluster: false,
           providerName: "looksrare_bid",
           deployBlock: 13885625,
           contractAddress: "0x59728544B08AB483533076417FbBB2fD0B17CE3a",
@@ -84,6 +89,7 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
         },
         {
           enabled: true,
+          cluster: false,
           providerName: "looksrare_ask",
           deployBlock: 13885625,
           contractAddress: "0x59728544B08AB483533076417FbBB2fD0B17CE3a",

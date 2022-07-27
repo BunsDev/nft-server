@@ -15,7 +15,6 @@ import { DEFAULT_TOKEN_ADDRESSES } from "../../constants";
 import { customMetricsReporter } from "../../utils/metrics";
 import { ClusterWorker, IClusterProvider } from "../../utils/cluster";
 import { restoreBigNumber } from "../../utils";
-import OpenSeaBaseProvider from "./base";
 import BaseProvider from "../BaseProvider";
 
 const LOGGER = getLogger("OPENSEA_PROVIDER", {

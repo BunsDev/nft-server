@@ -1,7 +1,7 @@
-import { v1 } from "@datadog/datadog-api-client";
+import { client, v1 } from "@datadog/datadog-api-client";
 import { getLogger } from "./logger";
 
-const configuration = v1.createConfiguration();
+const configuration = client.createConfiguration();
 const apiInstance = new v1.MetricsApi(configuration);
 const LOGGER = getLogger("DEFILLAMA_DD_METRICS_REPORT", {
   datadog: !!process.env.DATADOG_API_KEY,

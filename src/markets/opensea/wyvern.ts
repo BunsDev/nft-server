@@ -309,6 +309,16 @@ export default class WyvernProvider
       for (let j = 0; j < eventsSlice.length; j++) {
         const event = eventsSlice[j];
         const receipt = txReceipts[promiseMap[event.transactionHash]];
+        if (!receipt) {
+          LOGGER.error(`Missing receipt`, {
+            event,
+            promise: promiseMap[event.transactionHash],
+            receipt,
+            eventsSliceSize: eventsSlice.length,
+            j,
+          });
+          continue;
+        }
         if (!(receipt.transactionHash in receipts)) {
           receipts[receipt.transactionHash] = {
             receipt,
@@ -346,10 +356,15 @@ export default class WyvernProvider
     try {
       return await event.getTransactionReceipt();
     } catch (e) {
+      LOGGER.error(`Failed to get event receipt`, {
+        error: e,
+        event,
+      });
       if (retryCount > 3) {
-        LOGGER.error(`Failed to get event receipt`, {
+        LOGGER.alert(`Failed to get event receipts after retrying`, {
           error: e,
           event,
+          retryCount,
         });
         e.message = `Unabled to get event receipt`;
         throw e;

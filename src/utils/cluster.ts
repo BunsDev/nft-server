@@ -89,6 +89,10 @@ export interface IClusterProvider {
   cluster: IClusterManager;
 }
 
+export function isPrimary() {
+  return cluster.isMaster || cluster.isPrimary;
+}
+
 type Callback = () => unknown;
 
 const MAX_FORK_LEN = cpus().length - 1;

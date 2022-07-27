@@ -22,6 +22,14 @@ export type TLogger = {
   ) => void;
 };
 
+export type ErrorSerializer = {
+  _e?: (error: Error) => {
+    message: string;
+    stack: string;
+  };
+  [key: string]: any;
+};
+
 const _defaults: LoggerConfigOptions = {
   console: true,
   error: false,
@@ -29,7 +37,7 @@ const _defaults: LoggerConfigOptions = {
   debug: false,
   datadog: false,
   debugTo: {
-    console: false,
+    console: true,
     datadog: true,
   },
   format: null,
@@ -75,6 +83,14 @@ export function getLogger(
     transports = _defaults.transports,
     path = _defaults.path,
   } = options || {};
+  const datadogTransport =
+    datadog &&
+    new winston.transports.Http({
+      host: `http-intake.logs.datadoghq.com`,
+      path: `/api/v2/logs?dd-api-key=${process.env.DATADOG_API_KEY}&ddsource=nodejs&service=defillama-${name}`,
+      ssl: true,
+      level: debugTo.datadog ? "debug" : "info",
+    });
   const _logger: Logger = winston.createLogger({
     levels: levels ?? winston.config.npm.levels,
     format: format ?? winston.format.json(),
@@ -100,17 +116,20 @@ export function getLogger(
             filename: `${path}${name}.debug.log`,
             level: "debug",
           }),
-        datadog &&
-          new winston.transports.Http({
-            host: `http-intake.logs.datadoghq.com`,
-            path: `/api/v2/logs?dd-api-key=${process.env.DATADOG_API_KEY}&ddsource=nodejs&service=defillama-${name}`,
-            ssl: true,
-            level: debugTo.datadog ? "debug" : "info",
-          }),
+        datadogTransport,
       ].filter(Boolean),
+    exceptionHandlers: [datadogTransport].filter(Boolean),
+    rejectionHandlers: [datadogTransport].filter(Boolean),
   });
 
-  const LOGGER: TLogger = {};
+  const LOGGER: ErrorSerializer | TLogger = {
+    _e(error: Error) {
+      return {
+        message: error.toString(),
+        stack: error.stack,
+      };
+    },
+  };
   const _levels = Object.keys(levels ?? winston.config.npm.levels) as Array<
     keyof typeof _logger
   >;
@@ -122,6 +141,15 @@ export function getLogger(
       ...winston: Array<unknown>
     ) {
       const timestamp = Date.now();
+      if (meta && typeof meta === "object") {
+        try {
+          for (const [k, v] of Object.entries(meta)) {
+            if (typeof k === "string" && v instanceof Error) {
+              (<Record<string, any>>meta)[k] = LOGGER._e(v);
+            }
+          }
+        } catch (e) {}
+      }
       _logger[_level](
         { timestamp, message, meta, pid: process.pid },
         ...winston

@@ -284,10 +284,10 @@ export class CurrencyConverter {
           sale.chain
         )
       ) {
-        sale.priceUSD = roundUSD(
+        sale.priceBase = sale.price;
+        sale.priceUSD =
           sale.price *
-            prices[sale.chain][sale.paymentTokenAddress][timestampMap[t]]
-        );
+          prices[sale.chain][sale.paymentTokenAddress][timestampMap[t]];
       } else {
         sale.priceUSD =
           sale.price *

@@ -22,6 +22,7 @@ import {
   ClusterManager,
   ClusterWorker,
   IClusterProvider,
+  isPrimary,
 } from "../utils/cluster";
 import cluster from "cluster";
 import { IMarketOnChainProvider } from "../interfaces";
@@ -218,7 +219,7 @@ if (!process.argv[2]) {
   const provider = config.instantiate();
   if (cluster.isWorker && config.chainConfig.cluster) {
     ClusterWorker.create(process.env.WORKER_UUID, `LOOKSRARE`, provider);
-  } else if (cluster.isPrimary) {
+  } else if (isPrimary()) {
     if (config.chainConfig.cluster) {
       ClusterManager.create(`LOOKSRARE`, provider);
     }

@@ -289,6 +289,10 @@ export class CurrencyConverter {
           sale.price *
           prices[sale.chain][sale.paymentTokenAddress][timestampMap[t]];
       } else {
+        if (!(sale.paymentTokenAddress in prices[sale.chain])) {
+          LOGGER.warn(`LlamaFi Unsupported Token`, { sale });
+          continue;
+        }
         sale.priceUSD =
           sale.price *
           prices[sale.chain][sale.paymentTokenAddress][timestampMap[t]];

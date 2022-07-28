@@ -11,6 +11,7 @@ export type MarketChainConfig = {
   deploymentEventName: string;
   deployBlock?: number;
   cluster: boolean;
+  erc20Tokens: Array<string>;
 };
 
 export type MarketChainsConfig = Partial<Record<Blockchain, MarketChainConfig>>;
@@ -25,6 +26,12 @@ export type MultiMarketConfig = {
 export type MarketConfig = {
   chains: MarketChainsConfig;
 };
+
+const OS_WYVERN_TOKENS = [
+  "0x15D4c048F83bd7e37d49eA4C83a07267Ec4203dA",
+  "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+  "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+];
 
 const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
   [Marketplace.Opensea]: {
@@ -42,6 +49,7 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
             ...OwnableStandard,
             "event OrdersMatched (bytes32 buyHash, bytes32 sellHash, address indexed maker, address indexed taker, uint price, bytes32 indexed metadata)",
           ],
+          erc20Tokens: OS_WYVERN_TOKENS,
         },
         {
           enabled: true,
@@ -56,6 +64,7 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
             ...OwnableStandard,
             "event OrdersMatched (bytes32 buyHash, bytes32 sellHash, address indexed maker, address indexed taker, uint price, bytes32 indexed metadata)",
           ],
+          erc20Tokens: OS_WYVERN_TOKENS,
         },
         {
           enabled: true,
@@ -68,6 +77,7 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
             "0x9d9af8e38d66c62e2c12f0225249fd9d721c54b83f48d9352c97c6cacdcb6f31",
           deploymentEventName: "OwnershipTransferred",
           abi: `[{"anonymous":false,"inputs":[{"indexed":false,"internalType":"bytes32","name":"orderHash","type":"bytes32"},{"indexed":true,"internalType":"address","name":"offerer","type":"address"},{"indexed":true,"internalType":"address","name":"zone","type":"address"},{"indexed":false,"internalType":"address","name":"recipient","type":"address"},{"components":[{"internalType":"enum ItemType","name":"itemType","type":"uint8"},{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"identifier","type":"uint256"},{"internalType":"uint256","name":"amount","type":"uint256"}],"indexed":false,"internalType":"struct SpentItem[]","name":"offer","type":"tuple[]"},{"components":[{"internalType":"enum ItemType","name":"itemType","type":"uint8"},{"internalType":"address","name":"token","type":"address"},{"internalType":"uint256","name":"identifier","type":"uint256"},{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"address payable","name":"recipient","type":"address"}],"indexed":false,"internalType":"struct ReceivedItem[]","name":"consideration","type":"tuple[]"}],"name":"OrderFulfilled","type":"event"}]`,
+          erc20Tokens: OS_WYVERN_TOKENS,
         },
       ],
     },
@@ -86,6 +96,7 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
           abi: [
             "event TakerBid(bytes32 orderHash, uint256 orderNonce, address indexed taker, address indexed maker, address indexed strategy, address currency, address collection, uint256 tokenId, uint256 amount, uint256 price)",
           ],
+          erc20Tokens: [],
         },
         {
           enabled: true,
@@ -98,6 +109,7 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
           abi: [
             "event TakerAsk(bytes32 orderHash, uint256 orderNonce, address indexed taker, address indexed maker, address indexed strategy, address currency, address collection, uint256 tokenId, uint256 amount, uint256 price)",
           ],
+          erc20Tokens: [],
         },
       ],
     },

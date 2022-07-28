@@ -529,8 +529,13 @@ export default class WyvernProvider
     const amount = restoreBigNumber(eventLog.log.args[4]);
 
     if (hasERC20) {
-      address = ERC20Logs[0].contract;
-      LOGGER.info(`Payment Info`, {
+      const log = ERC20Logs.reverse().find((l) =>
+        this.config.chains[chain].erc20Tokens.includes(l.contract)
+      );
+      if (log) {
+        address = log.contract;
+      }
+      LOGGER.debug(`Payment Info`, {
         payment: { address, amount },
         hasERC20: hasERC20 ? "true" : "false",
         event,

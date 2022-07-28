@@ -43,10 +43,13 @@ function createProvider<T>(name: Blockchain, klass: unknown): T {
   switch (true) {
     case Object.is(klass, Provider):
       return new ethers.providers.FallbackProvider(
-        addresses.map(
-          (a) =>
-            new ethers.providers.StaticJsonRpcProvider(a, { name, chainId })
-        )
+        addresses.map((a, i) => ({
+          provider: new ethers.providers.StaticJsonRpcProvider(a, {
+            name,
+            chainId,
+          }),
+          priority: i,
+        }))
       ) as unknown as T;
     default:
       throw new Error("unsupported chain provider");

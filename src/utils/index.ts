@@ -250,3 +250,9 @@ export function restoreBigNumber(
   }
   return BigNumber.from(bigNum.hex);
 }
+
+export async function awaitSequence(
+  ...promiseFns: Array<() => Promise<unknown>>
+): Promise<unknown> {
+  return promiseFns.reduce((p, fn) => p.then(fn), Promise.resolve(!0));
+}

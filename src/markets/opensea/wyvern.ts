@@ -346,12 +346,7 @@ export default class WyvernProvider
     chain: Blockchain,
     retryCount = 0
   ): Promise<TransactionReceipt> {
-    if (
-      !("getTransactionReceipt" in event) ||
-      !(typeof event.getTransactionReceipt === "function")
-    ) {
-      this.restoreEventWrap(event, chain);
-    }
+    this.restoreEventWrap(event, chain);
 
     try {
       return await event.getTransactionReceipt();
@@ -376,7 +371,7 @@ export default class WyvernProvider
 
   private restoreEventWrap(event: Event, chain: Blockchain) {
     event.getTransactionReceipt = async (): Promise<TransactionReceipt> => {
-      return await this.chains[chain].provider.getTransactionReceipt(
+      return await this.chains[chain].firstRpcProvider.getTransactionReceipt(
         event.transactionHash
       );
     };

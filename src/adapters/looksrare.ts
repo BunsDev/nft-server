@@ -7,7 +7,7 @@ import {
   AdapterState,
 } from "../models";
 import { CurrencyConverter } from "../api/currency-converter";
-import { sleep, handleError, restoreBigNumber } from "../utils";
+import { sleep, handleError, restoreBigNumber, awaitSequence } from "../utils";
 import { Blockchain, Marketplace, SaleData } from "../types";
 import {
   MarketChainConfig,
@@ -27,6 +27,7 @@ import {
 import cluster from "cluster";
 import { IMarketOnChainProvider } from "../interfaces";
 import { fork } from "child_process";
+import dynamodb from "../utils/dynamodb";
 
 type AdapterProvider = IMarketOnChainProvider & IClusterProvider;
 type AdapterProviderConfig = {
@@ -128,36 +129,15 @@ async function runSales(provider: AdapterProvider): Promise<void> {
     }
 
     try {
-      await CurrencyConverter.matchSalesWithPrices(sales);
-
-      const salesInserted = await Sale.insert({
-        slug: collectionMap,
-        marketplace: Marketplace.LooksRare,
-        sales,
-      });
-
-      if (salesInserted) {
-        const slugMap = sales.reduce((slugs, sale) => {
-          const slug =
-            collectionMap[sale.contractAddress]?.slug ?? sale.contractAddress;
-          if (!(slug in slugs)) {
-            slugs[slug] = [];
-          }
-
-          slugs[slug].push(sale);
-
-          return slugs;
-        }, {} as Record<string, Array<SaleData>>);
-
-        for (const [slug, sales] of Object.entries(slugMap)) {
-          await HistoricalStatistics.updateStatistics({
-            slug,
-            chain: Blockchain.Ethereum,
+      await awaitSequence(
+        () => CurrencyConverter.matchSalesWithPrices(sales),
+        () =>
+          Sale.insert({
+            slug: collectionMap,
             marketplace: Marketplace.LooksRare,
             sales,
-          });
-        }
-      }
+          })
+      );
     } catch (e) {
       const hashes = sales.reduce((hashes, sale) => {
         if (!(sale.paymentTokenAddress in hashes)) {
@@ -167,6 +147,11 @@ async function runSales(provider: AdapterProvider): Promise<void> {
         return hashes;
       }, {} as Record<string, Array<string>>);
       LOGGER.error(`Sale error`, { error: e, sales, hashes });
+      dynamodb.put({
+        PK: "failedSales",
+        SK: `${providerName}#${Date.now()}`,
+        blockRange,
+      });
     }
 
     AdapterState.updateSalesLastSyncedBlockNumber(

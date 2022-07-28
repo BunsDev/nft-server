@@ -1,22 +1,15 @@
-import "../utils/tracer";
-import axios from "axios";
 import { DataAdapter } from ".";
-import { Collection, Contract, Sale, HistoricalStatistics, AdapterState } from "../models";
-import { Opensea } from "../api/opensea";
-import { Coingecko } from "../api/coingecko";
+import { Collection, Sale, AdapterState } from "../models";
 import { CurrencyConverter } from "../api/currency-converter";
-import { COINGECKO_IDS } from "../constants";
-import { sleep, handleError, filterObject, restoreBigNumber } from "../utils";
+import { sleep, handleError, restoreBigNumber, awaitSequence } from "../utils";
+import { Marketplace, SaleData } from "../types";
 import {
-  Blockchain,
-  CollectionData,
-  LowVolumeError,
-  Marketplace,
-  SaleData,
-} from "../types";
-import { MarketChainConfig, MarketConfig, OpenSea as OpenSeaMarketConfig } from "../markets";
+  MarketChainConfig,
+  MarketConfig,
+  OpenSea as OpenSeaMarketConfig,
+} from "../markets";
 import { OpenSeaProvider } from "../markets/OpenSeaProvider";
-import { BigNumber, ethers } from "ethers";
+import { ethers } from "ethers";
 import { ChainEvents } from "../markets/BaseMarketOnChainProvider";
 import { getLogger, configureLoggerDefaults } from "../utils/logger";
 import {
@@ -28,7 +21,7 @@ import {
 import cluster from "cluster";
 import { IMarketOnChainProvider } from "../interfaces";
 import { fork } from "child_process";
-import BaseProvider from "../markets/BaseProvider";
+import dynamodb from "../utils/dynamodb";
 
 type AdapterProvider = IMarketOnChainProvider & IClusterProvider;
 type AdapterProviderConfig = {
@@ -130,36 +123,15 @@ async function runSales(provider: AdapterProvider): Promise<void> {
     }
 
     try {
-      await CurrencyConverter.matchSalesWithPrices(sales);
-
-      const salesInserted = await Sale.insert({
-        slug: collectionMap,
-        marketplace: Marketplace.Opensea,
-        sales,
-      });
-
-      if (salesInserted) {
-        const slugMap = sales.reduce((slugs, sale) => {
-          const slug =
-            collectionMap[sale.contractAddress]?.slug ?? sale.contractAddress;
-          if (!(slug in slugs)) {
-            slugs[slug] = [];
-          }
-
-          slugs[slug].push(sale);
-
-          return slugs;
-        }, {} as Record<string, Array<SaleData>>);
-
-        for (const [slug, sales] of Object.entries(slugMap)) {
-          await HistoricalStatistics.updateStatistics({
-            slug,
-            chain: Blockchain.Ethereum,
+      await awaitSequence(
+        () => CurrencyConverter.matchSalesWithPrices(sales),
+        () =>
+          Sale.insert({
+            slug: collectionMap,
             marketplace: Marketplace.Opensea,
             sales,
-          });
-        }
-      }
+          })
+      );
     } catch (e) {
       const hashes = sales.reduce((hashes, sale) => {
         if (!(sale.paymentTokenAddress in hashes)) {
@@ -169,6 +141,11 @@ async function runSales(provider: AdapterProvider): Promise<void> {
         return hashes;
       }, {} as Record<string, Array<string>>);
       LOGGER.error(`Sale error`, { error: e, sales, hashes });
+      dynamodb.put({
+        PK: "failedSales",
+        SK: `${providerName}#${Date.now()}`,
+        blockRange,
+      });
     }
 
     AdapterState.updateSalesLastSyncedBlockNumber(

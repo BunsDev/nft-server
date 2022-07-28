@@ -14,10 +14,9 @@ export class UnparsableLogError extends Error {
   message = "Failed to parse event log.";
   constructor(public log: Log, public errors: ParseErrors) {
     super();
-    LOGGER.error(
-      `${log.transactionHash} => Failed to parse any standardized contract interfaces (ERC721, ERC1155, ERC20).`,
-      log,
-      errors
+    LOGGER.warn(
+      `Failed to parse any standardized contract interfaces (ERC721, ERC1155, ERC20).`,
+      { log, errors }
     );
   }
 }

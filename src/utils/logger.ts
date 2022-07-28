@@ -1,4 +1,13 @@
+import { Interface } from "@ethersproject/abi";
 import winston, { Logger } from "winston";
+
+interface ILevels {
+  alert: number;
+  error: number;
+  warn: number;
+  info: number;
+  debug: number;
+}
 
 interface LoggerConfigOptions {
   console?: boolean;
@@ -8,29 +17,12 @@ interface LoggerConfigOptions {
   datadog?: boolean;
   debugTo?: Record<string, boolean>;
   format?: winston.Logform.Format;
-  levels?: winston.config.AbstractConfigSetLevels;
   transports?: winston.transport[];
   path?: string;
   [x: string]: any;
 }
 
-export type TLogger = {
-  [key: string]: (
-    message: string,
-    meta?: unknown,
-    ...winston: Array<unknown>
-  ) => void;
-};
-
-export type ErrorSerializer = {
-  _e?: (error: Error) => {
-    message: string;
-    stack: string;
-  };
-  [key: string]: any;
-};
-
-const _defaults: LoggerConfigOptions = {
+export const _defaults: LoggerConfigOptions = {
   console: true,
   error: false,
   info: false,
@@ -41,16 +33,38 @@ const _defaults: LoggerConfigOptions = {
     datadog: true,
   },
   format: null,
-  levels: {
-    alert: 0,
-    error: 1,
-    warn: 2,
-    info: 3,
-    debug: 4,
-  },
   transports: null,
   path: "./",
 };
+
+export const Levels: ILevels = {
+  alert: 0,
+  error: 1,
+  warn: 2,
+  info: 3,
+  debug: 4,
+};
+
+type SerializedError = {
+  message: string;
+  stack: string;
+};
+
+type LogMethod = (
+  message: string,
+  meta?: unknown,
+  ...winston: Array<unknown>
+) => void;
+
+export interface LevelLogger {
+  alert: LogMethod;
+  error: LogMethod;
+  warn: LogMethod;
+  info: LogMethod;
+  debug: LogMethod;
+  _logger: winston.Logger;
+  _e(error: Error): SerializedError;
+}
 
 export function configureLoggerDefaults(
   newDefaults: Partial<LoggerConfigOptions>
@@ -67,7 +81,7 @@ export function configureLoggerDefaults(
 export function getLogger(
   name: string,
   options?: LoggerConfigOptions
-): TLogger {
+): LevelLogger {
   if (process.argv[3]) {
     name = `${name}_${process.argv[3]}`;
   }
@@ -87,7 +101,7 @@ export function getLogger(
     datadog &&
     new winston.transports.Http({
       host: `http-intake.logs.datadoghq.com`,
-      path: `/api/v2/logs?dd-api-key=${process.env.DATADOG_API_KEY}&ddsource=nodejs&service=defillama-${name}`,
+      path: `/api/v2/logs?dd-api-key=${process.env.DATADOG_API_KEY}&ddsource=defillama-${process.env.NODE_ENV ?? "development"}&service=defillama-${name}`,
       ssl: true,
       level: debugTo.datadog ? "debug" : "info",
     });
@@ -122,20 +136,8 @@ export function getLogger(
     rejectionHandlers: [datadogTransport].filter(Boolean),
   });
 
-  const LOGGER: ErrorSerializer | TLogger = {
-    _e(error: Error) {
-      return {
-        message: error.toString(),
-        stack: error.stack,
-      };
-    },
-  };
-  const _levels = Object.keys(levels ?? winston.config.npm.levels) as Array<
-    keyof typeof _logger
-  >;
-
-  for (const _level of _levels) {
-    LOGGER[_level as string] = function (
+  const getLogLevelFunction = (level: keyof typeof _logger) => {
+    return function (
       message: string,
       meta?: unknown,
       ...winston: Array<unknown>
@@ -150,12 +152,27 @@ export function getLogger(
           }
         } catch (e) {}
       }
-      _logger[_level](
+      _logger[level](
         { timestamp, message, meta, pid: process.pid },
         ...winston
       );
     };
-  }
+  };
+
+  const LOGGER: LevelLogger = {
+    alert: getLogLevelFunction("alert"),
+    error: getLogLevelFunction("error"),
+    warn: getLogLevelFunction("warn"),
+    info: getLogLevelFunction("info"),
+    debug: getLogLevelFunction("debug"),
+    _logger,
+    _e(error: Error) {
+      return {
+        message: error.toString(),
+        stack: error.stack,
+      };
+    },
+  };
 
   return LOGGER;
 }

@@ -82,12 +82,12 @@ async function runSales(provider: AdapterProvider): Promise<void> {
     for (const [hash, receiptWithMeta] of Object.entries(receipts)) {
       const { meta: metas, receipt } = receiptWithMeta;
       if (!metas.length) {
-        LOGGER.info(`Skipping ${receipt.transactionHash}`);
+        LOGGER.warn(`Skipping TX empty metadata`, { receipt, metas });
         continue;
       }
       for (const meta of metas) {
         if (!meta) {
-          LOGGER.error(`Skipping meta`, { tx: receipt.transactionHash });
+          LOGGER.warn(`Skipping meta`, { tx: receipt.transactionHash });
           continue;
         }
         const { contractAddress, price, eventSignatures, data, payment } = meta;
@@ -140,7 +140,12 @@ async function runSales(provider: AdapterProvider): Promise<void> {
         hashes[sale.paymentTokenAddress].push(sale.txnHash);
         return hashes;
       }, {} as Record<string, Array<string>>);
-      LOGGER.error(`Sale error`, { error: e, sales, hashes });
+      LOGGER.error(`Sale error`, {
+        error: e,
+        sales,
+        hashes,
+        emptySales: !sales.length ? "true" : "false",
+      });
       dynamodb.put({
         PK: "failedSales",
         SK: `${providerName}#${Date.now()}`,

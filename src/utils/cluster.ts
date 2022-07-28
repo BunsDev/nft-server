@@ -1,7 +1,7 @@
 import cluster, { Worker } from "cluster";
 import { cpus } from "os";
 import { randomUUID as uuid } from "crypto";
-import { getLogger, TLogger } from "./logger";
+import { getLogger, LevelLogger } from "./logger";
 import { IMarketOnChainProvider } from "../interfaces";
 import { throws } from "assert";
 import { workerData } from "worker_threads";
@@ -101,7 +101,7 @@ const __clusters: Record<string, IClusterManager> = {};
 export class ClusterManager implements IClusterManager {
   private _currentWorker = -1;
   private _workerEnv: Record<string, unknown> = {};
-  private LOGGER: TLogger;
+  private LOGGER: LevelLogger;
   public workers: Map<string, ClusterMember> = new Map();
   private work: Map<string, Array<WorkerWork>> = new Map();
 
@@ -418,7 +418,7 @@ export class ClusterManager implements IClusterManager {
 }
 
 export class ClusterWorker implements IClusterWorker {
-  private LOGGER: TLogger;
+  private LOGGER: LevelLogger;
   private __state: WorkerState;
 
   static create(

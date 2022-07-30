@@ -1,4 +1,4 @@
-import { Marketplace, SaleData } from "../types";
+import { Marketplace, RecordState, SaleData } from "../types";
 import { handleError } from "../utils";
 import dynamodb from "../utils/dynamodb";
 
@@ -44,6 +44,7 @@ export class Sale {
                   slugStr || sale.contractAddress
                 }#marketplace#${marketplace}`,
                 SK: sortKey,
+                recordState: RecordState.UNPROCESSED,
                 ...data,
               });
             }

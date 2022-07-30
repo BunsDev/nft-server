@@ -24,36 +24,74 @@ export function getClient(
 
 const _client = getClient();
 
-export function getTableClient(TableName: string, client = _client) {
+export interface DynamoTableClient {
+  get(
+    params: Omit<AWS.DynamoDB.DocumentClient.GetItemInput, "TableName">
+  ): Promise<AWS.DynamoDB.DocumentClient.GetItemOutput>;
+  put(
+    item: AWS.DynamoDB.DocumentClient.PutItemInputAttributeMap,
+    params?: Partial<AWS.DynamoDB.DocumentClient.PutItemInput>
+  ): Promise<AWS.DynamoDB.DocumentClient.PutItemOutput>;
+  query(
+    params: Omit<AWS.DynamoDB.DocumentClient.QueryInput, "TableName">
+  ): Promise<AWS.DynamoDB.DocumentClient.QueryOutput>;
+  update(
+    params: Omit<AWS.DynamoDB.DocumentClient.UpdateItemInput, "TableName">
+  ): Promise<AWS.DynamoDB.DocumentClient.UpdateItemOutput>;
+  delete(
+    params: Omit<AWS.DynamoDB.DocumentClient.DeleteItemInput, "TableName">
+  ): Promise<AWS.DynamoDB.DocumentClient.DeleteItemOutput>;
+  batchWrite(
+    items: AWS.DynamoDB.DocumentClient.PutItemInputAttributeMap[]
+  ): Promise<AWS.DynamoDB.DocumentClient.BatchWriteItemOutput>;
+  batchGet(
+    keys: AWS.DynamoDB.DocumentClient.KeyList
+  ): Promise<AWS.DynamoDB.DocumentClient.BatchGetItemOutput>;
+  transactWrite(items: {
+    putItems?: Omit<
+      AWS.DynamoDB.DocumentClient.PutItemInputAttributeMap,
+      "TableName"
+    >[];
+    updateItems?: Omit<
+      AWS.DynamoDB.DocumentClient.UpdateItemInput,
+      "TableName"
+    >[];
+    deleteItems?: Omit<
+      AWS.DynamoDB.DocumentClient.DeleteItemInput,
+      "TableName"
+    >[];
+  }): Promise<AWS.DynamoDB.DocumentClient.TransactWriteItemsOutput>;
+  scan(
+    params: Omit<AWS.DynamoDB.DocumentClient.ScanInput, "TableName">
+  ): Promise<AWS.DynamoDB.DocumentClient.ScanOutput>;
+}
+
+export function getTableClient(
+  TableName: string,
+  client = _client
+): DynamoTableClient {
   return {
-    get(params: Omit<AWS.DynamoDB.DocumentClient.GetItemInput, "TableName">) {
+    get(params) {
       return client.get({ TableName, ...params }).promise();
     },
 
-    put(
-      item: AWS.DynamoDB.DocumentClient.PutItemInputAttributeMap,
-      params?: Partial<AWS.DynamoDB.DocumentClient.PutItemInput>
-    ) {
+    put(item, params?) {
       return client.put({ TableName, ...params, Item: item }).promise();
     },
 
-    query(params: Omit<AWS.DynamoDB.DocumentClient.QueryInput, "TableName">) {
+    query(params) {
       return client.query({ TableName, ...params }).promise();
     },
 
-    update(
-      params: Omit<AWS.DynamoDB.DocumentClient.UpdateItemInput, "TableName">
-    ) {
+    update(params) {
       return client.update({ TableName, ...params }).promise();
     },
 
-    delete(
-      params: Omit<AWS.DynamoDB.DocumentClient.DeleteItemInput, "TableName">
-    ) {
+    delete(params) {
       return client.delete({ TableName, ...params }).promise();
     },
 
-    batchWrite(items: AWS.DynamoDB.DocumentClient.PutItemInputAttributeMap[]) {
+    batchWrite(items) {
       return client
         .batchWrite({
           RequestItems: {
@@ -62,7 +100,8 @@ export function getTableClient(TableName: string, client = _client) {
         })
         .promise();
     },
-    batchGet(keys: AWS.DynamoDB.DocumentClient.KeyList) {
+
+    batchGet(keys) {
       return client
         .batchGet({
           RequestItems: {
@@ -73,24 +112,8 @@ export function getTableClient(TableName: string, client = _client) {
         })
         .promise();
     },
-    transactWrite({
-      putItems = [],
-      updateItems = [],
-      deleteItems = [],
-    }: {
-      putItems?: Omit<
-        AWS.DynamoDB.DocumentClient.PutItemInputAttributeMap,
-        "TableName"
-      >[];
-      updateItems?: Omit<
-        AWS.DynamoDB.DocumentClient.UpdateItemInput,
-        "TableName"
-      >[];
-      deleteItems?: Omit<
-        AWS.DynamoDB.DocumentClient.DeleteItemInput,
-        "TableName"
-      >[];
-    }) {
+
+    transactWrite({ putItems = [], updateItems = [], deleteItems = [] }) {
       return client
         .transactWrite({
           TransactItems: [
@@ -117,9 +140,7 @@ export function getTableClient(TableName: string, client = _client) {
         .promise();
     },
 
-    scan(
-      params: Omit<AWS.DynamoDB.DocumentClient.ScanInput, "TableName">
-    ): Promise<AWS.DynamoDB.DocumentClient.ScanOutput> {
+    scan(params): Promise<AWS.DynamoDB.DocumentClient.ScanOutput> {
       return client.scan({ ...params, TableName }).promise();
     },
   };

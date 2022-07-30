@@ -95,6 +95,12 @@ export interface CollectionAndStatisticData {
   statistics: StatisticData;
 }
 
+export enum RecordState {
+  UNPROCESSED = 0,
+  COLLECTION_EXISTS = 1,
+  VOLUME_RECORDED = 2,
+}
+
 export interface SaleData {
   txnHash: string;
   timestamp: string; // timestamp in milliseconds
@@ -109,6 +115,7 @@ export interface SaleData {
   chain: Blockchain;
   metadata?: Record<string, any>;
   count?: number;
+  recordState?: RecordState;
 }
 
 export type HumanABI = string[] | string;

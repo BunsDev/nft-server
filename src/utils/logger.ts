@@ -1,7 +1,8 @@
 import { Interface } from "@ethersproject/abi";
 import winston, { Logger } from "winston";
+import { AbstractConfigSetLevels } from "winston/lib/winston/config";
 
-interface ILevels {
+interface ILevels extends AbstractConfigSetLevels {
   alert: number;
   error: number;
   warn: number;
@@ -106,7 +107,7 @@ export function getLogger(
       level: debugTo.datadog ? "debug" : "info",
     });
   const _logger: Logger = winston.createLogger({
-    levels: levels ?? winston.config.npm.levels,
+    levels: Levels,
     format: format ?? winston.format.json(),
     transports:
       transports ??

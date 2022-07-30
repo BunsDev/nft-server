@@ -11,6 +11,7 @@ import {
   Marketplace,
 } from "../types";
 import { Collection, HistoricalStatistics } from "../models";
+import { readlink } from "fs";
 
 export interface ImmutableXCollectionData {
   address: string;
@@ -61,11 +62,28 @@ interface ImmutableXOrderData {
 
 export class ImmutableX {
   public static async getAllCollections(): Promise<ImmutableXCollectionData[]> {
+    const collections: ImmutableXCollectionData[] = [];
     const url = `https://api.x.immutable.com/v1/collections`;
-    const response = await axios.get(url);
-    const { result } = response.data;
+    let cursor = "";
+    try {
+      while (true) {
+        const response = await axios.get(url, {
+          params: { cursor },
+        });
+        ({ cursor } = response.data);
+        const { result, remaining } = response.data;
 
-    return result;
+        collections.push(...result);
+
+        if (remaining === 0) {
+          break;
+        }
+      }
+    } catch (e) {
+      return collections;
+    }
+
+    return collections;
   }
 
   public static async getCollectionMetadata(

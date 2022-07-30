@@ -41,7 +41,7 @@ const autoStartAdapters: Array<string> = [
   // "nftkey",
 ];
 
-const LOGGER = getLogger("OPENSEA_ADAPTER", {
+const LOGGER = getLogger("ADAPTER_STARTUP", {
   datadog: !!process.env.DATADOG_API_KEY,
 });
 

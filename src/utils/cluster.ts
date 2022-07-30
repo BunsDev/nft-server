@@ -539,7 +539,7 @@ export class ClusterWorker implements IClusterWorker {
   }
 }
 
-function getDeferred<T>(): DeferredWork<T> {
+export function getDeferred<T>(): DeferredWork<T> {
   const deferred: DeferredWork<T> = {
     promise: null,
     resolve: null,

@@ -1,8 +1,11 @@
+import { LooksRare } from "../api/looksrare";
+import { Opensea } from "../api/opensea";
 import { CHAIN_MARKETPLACES } from "../constants";
 import {
   Blockchain,
   CollectionData,
   Marketplace,
+  SaleData,
   StatisticData,
 } from "../types";
 import { getSlugFromPK, handleError } from "../utils";
@@ -22,6 +25,60 @@ export class Collection {
   twitterUsername: string;
   mediumUsername: string;
 
+  static async createCollectionsFromSales(
+    sales: SaleData[],
+    marketplace?: Marketplace
+  ): Promise<Record<string, boolean>> {
+    const collections: Record<string, boolean> = {};
+    const contracts: Array<string> = [];
+    for (const sale of sales) {
+      if (!contracts.includes(sale.contractAddress)) {
+        let collection;
+        try {
+          try {
+            switch (marketplace) {
+              case Marketplace.Opensea:
+              // For LooksRare we will use info from OS
+              // eslint-disable-next-line no-fallthrough
+              case Marketplace.LooksRare:
+                collection = await Opensea.getContract(sale.contractAddress);
+                break;
+              default:
+            }
+          } catch (e) {}
+
+          collections[sale.contractAddress] = false;
+
+          if (collection) {
+            const upsert = await Collection.upsert({
+              slug: sale.contractAddress,
+              chain: sale.chain,
+              marketplace: marketplace ?? sale.marketplace,
+              metadata: collection,
+              statistics: {
+                floor: 0,
+                floorUSD: 0,
+                marketCap: 0,
+                marketCapUSD: 0,
+                owners: 0,
+                dailyVolume: 0,
+                dailyVolumeUSD: 0,
+                fromSales: true,
+                totalVolume: 0,
+                totalVolumeUSD: 0,
+              },
+            });
+            collections[sale.contractAddress] = upsert;
+          }
+          contracts.push(sale.contractAddress);
+        } catch (e) {
+          handleError(e, `Collection Upsert Failed`);
+        }
+      }
+    }
+    return collections;
+  }
+
   static async insert({
     slug,
     chain,
@@ -34,7 +91,7 @@ export class Collection {
     marketplace: Marketplace;
     metadata: CollectionData;
     statistics: StatisticData;
-  }) {
+  }): Promise<boolean> {
     try {
       const currentTime = Date.now();
 
@@ -89,8 +146,11 @@ export class Collection {
           },
         ],
       });
+
+      return true;
     } catch (e) {
       handleError(e, "collection-model:insert");
+      return false;
     }
   }
 
@@ -106,7 +166,7 @@ export class Collection {
     statistics: StatisticData;
     chain: Blockchain;
     marketplace: Marketplace;
-  }) {
+  }): Promise<boolean> {
     const currentTime = Date.now();
 
     const existingChains = collection
@@ -122,15 +182,16 @@ export class Collection {
       ":owners": statistics.owners,
       ":totalVolume": statistics.totalVolume,
       ":totalVolumeUSD": statistics.totalVolumeUSD,
-      ":dailyVolume": statistics.dailyVolume,
-      ":dailyVolumeUSD": statistics.dailyVolumeUSD,
+      ":dailyVolume": statistics.dailyVolume || 0,
+      ":dailyVolumeUSD": statistics.dailyVolumeUSD || 0,
       ":floor": statistics.floor,
       ":floorUSD": statistics.floorUSD,
       ":marketCap": statistics.marketCap,
       ":marketCapUSD": statistics.marketCapUSD,
       ":updatedAt": currentTime,
       ":chains": existingChains,
-      ":marketplaces": existingMarketplaces
+      ":marketplaces": existingMarketplaces,
+      ":category": `collections#marketplace#${marketplace}`,
     };
 
     // Calculate chain data
@@ -185,8 +246,8 @@ export class Collection {
         {
           totalVolume: statistics.totalVolume,
           totalVolumeUSD: statistics.totalVolumeUSD,
-          dailyVolume: statistics.dailyVolume,
-          dailyVolumeUSD: statistics.dailyVolumeUSD,
+          dailyVolume: statistics.dailyVolume || 0,
+          dailyVolumeUSD: statistics.dailyVolumeUSD || 0,
           ownersArr: statistics.owners ? [statistics.owners] : [],
           floorArr: statistics.floor ? [statistics.floor] : [],
           floorUSDArr: statistics.floorUSD ? [statistics.floorUSD] : [],
@@ -201,8 +262,8 @@ export class Collection {
       chainAttributeValues = {
         ":totalVolume": chainData.totalVolume,
         ":totalVolumeUSD": chainData.totalVolumeUSD,
-        ":dailyVolume": chainData.dailyVolume,
-        ":dailyVolumeUSD": chainData.dailyVolumeUSD,
+        ":dailyVolume": chainData.dailyVolume || 0,
+        ":dailyVolumeUSD": chainData.dailyVolumeUSD || 0,
         ":owners": chainData.ownersArr.length
           ? Math.max(...chainData.ownersArr)
           : 0,
@@ -220,7 +281,8 @@ export class Collection {
           : 0,
         ":updatedAt": currentTime,
         ":chains": existingChains,
-        ":marketplaces": existingMarketplaces
+        ":marketplaces": existingMarketplaces,
+        ":category": `collections#chain#${chain}`,
       };
     }
 
@@ -266,8 +328,8 @@ export class Collection {
       {
         totalVolume: statistics.totalVolume,
         totalVolumeUSD: statistics.totalVolumeUSD,
-        dailyVolume: statistics.dailyVolume,
-        dailyVolumeUSD: statistics.dailyVolumeUSD,
+        dailyVolume: statistics.dailyVolume || 0,
+        dailyVolumeUSD: statistics.dailyVolumeUSD || 0,
         ownersArr: statistics.owners ? [statistics.owners] : [],
         floorArr: statistics.floor ? [statistics.floor] : [],
         floorUSDArr: statistics.floorUSD ? [statistics.floorUSD] : [],
@@ -280,8 +342,8 @@ export class Collection {
     const overviewAttributeValues = {
       ":totalVolume": overviewData.totalVolume,
       ":totalVolumeUSD": overviewData.totalVolumeUSD,
-      ":dailyVolume": overviewData.dailyVolume,
-      ":dailyVolumeUSD": overviewData.dailyVolumeUSD,
+      ":dailyVolume": overviewData.dailyVolume || 0,
+      ":dailyVolumeUSD": overviewData.dailyVolumeUSD || 0,
       ":owners": overviewData.ownersArr.length
         ? Math.max(...overviewData.ownersArr)
         : 0,
@@ -299,7 +361,8 @@ export class Collection {
         : 0,
       ":updatedAt": currentTime,
       ":chains": existingChains,
-      ":marketplaces": existingMarketplaces
+      ":marketplaces": existingMarketplaces,
+      ":category": `overview`,
     };
 
     // Update items
@@ -315,7 +378,8 @@ export class Collection {
         marketCapUSD = :marketCapUSD,
         updatedAt = :updatedAt,
         chains = :chains,
-        marketplaces = :marketplaces`;
+        marketplaces = :marketplaces,
+        category = :category`;
 
     await dynamodb.transactWrite({
       updateItems: [
@@ -345,6 +409,8 @@ export class Collection {
         },
       ],
     });
+
+    return true;
   }
 
   static async upsert({
@@ -359,46 +425,51 @@ export class Collection {
     statistics: StatisticData;
     chain: Blockchain;
     marketplace: Marketplace;
-  }) {
-    try {
-      const existingCollection = await Collection.get(slug);
+  }): Promise<boolean> {
+    const existingCollections = await Collection.get(slug);
 
-      // If collection already exists, update statistics
-      if (existingCollection.length) {
-        await Collection.update({
+    // If collection already exists, update statistics
+    if (existingCollections.length) {
+      try {
+        return await Collection.update({
           slug,
           chain,
           marketplace,
           statistics,
-          collection: existingCollection,
+          collection: existingCollections,
         });
+      } catch (e) {
+        handleError(e, "collection-model:update");
+        return false;
       }
+    }
 
-      // If collection doesn't exist, increment collection counts
-      // and insert metadata and statistics
-      else {
-        await Collection.insert({
-          slug,
-          chain,
-          marketplace,
-          metadata,
-          statistics,
-        });
-      }
-    } catch (e) {
-      handleError(e, "collection-model:upsert");
+    // If collection doesn't exist, increment collection counts
+    // and insert metadata and statistics
+    else {
+      return await Collection.insert({
+        slug,
+        chain,
+        marketplace,
+        metadata,
+        statistics,
+      });
     }
   }
 
   static async get(slug: string) {
-    return dynamodb
-      .query({
-        KeyConditionExpression: "PK = :pk",
-        ExpressionAttributeValues: {
-          ":pk": `collection#${slug}`,
-        },
-      })
-      .then((result) => result.Items);
+    try {
+      return await dynamodb
+        .query({
+          KeyConditionExpression: "PK = :pk",
+          ExpressionAttributeValues: {
+            ":pk": `collection#${slug}`,
+          },
+        })
+        .then((result) => result.Items);
+    } catch (e) {
+      return [];
+    }
   }
 
   static async getStatisticsByChain(slug: string, chain: Blockchain) {

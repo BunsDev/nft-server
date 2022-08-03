@@ -1,5 +1,13 @@
 import AWS from "aws-sdk";
-import { CredentialsOptions } from "aws-sdk/lib/credentials";
+import { getLogger } from "./logger";
+
+const LOGGER = getLogger("DYNAMODB_DEBUG", {
+  datadog: !!process.env.DATADOG_API_KEY,
+  debugTo: {
+    console: !!process.env.DYNAMODB_DD_DEBUG,
+    datadog: !!process.env.DYNAMODB_DD_DEBUG,
+  },
+});
 
 const MOCK_DYNAMODB_ENDPOINT = process.env.MOCK_DYNAMODB_ENDPOINT;
 const DEFAULT_TABLE = process.env.TABLE_NAME ?? "defillama_nft_collections";
@@ -17,7 +25,19 @@ export function getClient(
         }
       : {
           region: process.env.AWS_REGION ?? "us-east-2", // For running the adapters locally but using the prod DB
+          ...(process.env.AWS_ACCESS_KEY && {
+            credentials: {
+              accessKeyId: process.env.AWS_ACCESS_KEY,
+              secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+            },
+          }),
         };
+    config.logger = {
+      log: (...messages: Array<any>) => {
+        !!process.env.DYNAMODB_DD_DEBUG &&
+          LOGGER.debug(`DDB Debug`, { messages });
+      },
+    };
   }
   return new AWS.DynamoDB.DocumentClient(config);
 }

@@ -1,6 +1,6 @@
 import { getLogger } from "../utils/logger";
 import { Collection } from ".";
-import { Blockchain, Marketplace, SaleData } from "../types";
+import { Blockchain, Marketplace, SaleData, UpdateCollectionStatisticsResult } from "../types";
 import { handleError } from "../utils";
 import dynamodb from "../utils/dynamodb";
 
@@ -41,32 +41,46 @@ export class HistoricalStatistics {
     marketplace,
     volumes,
     failureAttempt = 0,
+    negate = false,
   }: {
     slug: string;
     chain: Blockchain;
     marketplace: Marketplace;
     volumes: any;
     failureAttempt?: number;
-  }) {
+    negate?: boolean;
+  }): Promise<UpdateCollectionStatisticsResult> {
+    const result: UpdateCollectionStatisticsResult = {
+      fromSales: {
+        didEnter: false,
+        result: false,
+        output: {},
+      },
+      ranOverview: false,
+      slug,
+      chain,
+      marketplace,
+      volumesResult: {},
+      negate,
+    };
     const overviewStatistics = await Collection.getStatisticsByMarketplace(
       slug,
       marketplace
     );
 
-    if (overviewStatistics) {
-      LOGGER.debug(`updateCollectionStatistics(): overviewStatistics`, {
-        overviewStatistics,
-      });
+    if (overviewStatistics && !negate) {
+      result.ranOverview = true;
       const { fromSales } = overviewStatistics;
 
       if (!fromSales) {
+        result.fromSales.didEnter = true;
         const { totalVolume, totalVolumeUSD } =
           await HistoricalStatistics.getCollectionTotalVolume({
             slug,
             marketplace,
           });
 
-        await dynamodb.transactWrite({
+        result.fromSales.output = await dynamodb.transactWrite({
           updateItems: [
             {
               Key: {
@@ -115,120 +129,115 @@ export class HistoricalStatistics {
             },
           ],
         });
+
+        result.fromSales.result = true;
       }
     }
 
     for (const timestamp in volumes) {
-      const { volume, volumeUSD } = volumes[timestamp];
-      let updateItems;
       try {
-        updateItems = [
-          {
-            Key: {
-              PK: `collection#${slug}`,
-              SK: "overview",
+        result.volumesResult[timestamp] = {
+          result: false,
+          output: null,
+        };
+
+        let { volume, volumeUSD } = volumes[timestamp];
+        if (negate) {
+          volume = -volume;
+          volumeUSD = -volumeUSD;
+        }
+
+        result.volumesResult[timestamp].output = await dynamodb.transactWrite({
+          updateItems: [
+            {
+              Key: {
+                PK: `collection#${slug}`,
+                SK: "overview",
+              },
+              UpdateExpression: `
+                ADD totalVolume :volume,
+                    totalVolumeUSD  :volumeUSD
+              `,
+              ExpressionAttributeValues: {
+                ":volume": volume,
+                ":volumeUSD": volumeUSD,
+              },
             },
-            UpdateExpression: `
-              ADD totalVolume :volume,
-                  totalVolumeUSD  :volumeUSD
-            `,
-            ExpressionAttributeValues: {
-              ":volume": volume,
-              ":volumeUSD": volumeUSD,
+            {
+              Key: {
+                PK: `collection#${slug}`,
+                SK: `chain#${chain}`,
+              },
+              UpdateExpression: `
+                ADD totalVolume :volume,
+                    totalVolumeUSD  :volumeUSD
+              `,
+              ExpressionAttributeValues: {
+                ":volume": volume,
+                ":volumeUSD": volumeUSD,
+              },
             },
-          },
-          {
-            Key: {
-              PK: `collection#${slug}`,
-              SK: `chain#${chain}`,
+            {
+              Key: {
+                PK: `collection#${slug}`,
+                SK: `marketplace#${marketplace}`,
+              },
+              UpdateExpression: `
+                ADD totalVolume :volume,
+                    totalVolumeUSD  :volumeUSD
+              `,
+              ExpressionAttributeValues: {
+                ":volume": volume,
+                ":volumeUSD": volumeUSD,
+              },
             },
-            UpdateExpression: `
-              ADD totalVolume :volume,
-                  totalVolumeUSD  :volumeUSD
-            `,
-            ExpressionAttributeValues: {
-              ":volume": volume,
-              ":volumeUSD": volumeUSD,
+            {
+              Key: {
+                PK: `statistics#${slug}`,
+                SK: `${timestamp}`,
+              },
+              UpdateExpression: `
+                ADD #chainvolume :volume,
+                    #chainvolumeUSD :volumeUSD,
+                    #marketplacevolume :volume,
+                    #marketplacevolumeUSD :volumeUSD
+              `,
+              ExpressionAttributeNames: {
+                "#chainvolume": `chain_${chain}_volume`,
+                "#chainvolumeUSD": `chain_${chain}_volumeUSD`,
+                "#marketplacevolume": `marketplace_${marketplace}_volume`,
+                "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
+              },
+              ExpressionAttributeValues: {
+                ":volume": volume,
+                ":volumeUSD": volumeUSD,
+              },
             },
-          },
-          {
-            Key: {
-              PK: `collection#${slug}`,
-              SK: `marketplace#${marketplace}`,
+            {
+              Key: {
+                PK: `globalStatistics`,
+                SK: `${timestamp}`,
+              },
+              UpdateExpression: `
+                ADD #chainvolume :volume,
+                    #chainvolumeUSD :volumeUSD,
+                    #marketplacevolume :volume,
+                    #marketplacevolumeUSD :volumeUSD
+              `,
+              ExpressionAttributeNames: {
+                "#chainvolume": `chain_${chain}_volume`,
+                "#chainvolumeUSD": `chain_${chain}_volumeUSD`,
+                "#marketplacevolume": `marketplace_${marketplace}_volume`,
+                "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
+              },
+              ExpressionAttributeValues: {
+                ":volume": volume,
+                ":volumeUSD": volumeUSD,
+              },
             },
-            UpdateExpression: `
-              ADD totalVolume :volume,
-                  totalVolumeUSD  :volumeUSD
-            `,
-            ExpressionAttributeValues: {
-              ":volume": volume,
-              ":volumeUSD": volumeUSD,
-            },
-          },
-          {
-            Key: {
-              PK: `statistics#${slug}`,
-              SK: `${timestamp}`,
-            },
-            UpdateExpression: `
-              ADD #chainvolume :volume,
-                  #chainvolumeUSD :volumeUSD,
-                  #marketplacevolume :volume,
-                  #marketplacevolumeUSD :volumeUSD
-            `,
-            ExpressionAttributeNames: {
-              "#chainvolume": `chain_${chain}_volume`,
-              "#chainvolumeUSD": `chain_${chain}_volumeUSD`,
-              "#marketplacevolume": `marketplace_${marketplace}_volume`,
-              "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
-            },
-            ExpressionAttributeValues: {
-              ":volume": volume,
-              ":volumeUSD": volumeUSD,
-            },
-          },
-          {
-            Key: {
-              PK: `globalStatistics`,
-              SK: `${timestamp}`,
-            },
-            UpdateExpression: `
-              ADD #chainvolume :volume,
-                  #chainvolumeUSD :volumeUSD,
-                  #marketplacevolume :volume,
-                  #marketplacevolumeUSD :volumeUSD
-            `,
-            ExpressionAttributeNames: {
-              "#chainvolume": `chain_${chain}_volume`,
-              "#chainvolumeUSD": `chain_${chain}_volumeUSD`,
-              "#marketplacevolume": `marketplace_${marketplace}_volume`,
-              "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
-            },
-            ExpressionAttributeValues: {
-              ":volume": volume,
-              ":volumeUSD": volumeUSD,
-            },
-          },
-        ];
-        LOGGER.debug(`updateCollectionStatistics(): volumes`, {
-          timestamp,
-          slug,
-          chain,
-          marketplace,
-          volumes,
-          failureAttempt,
-          updateItems,
+          ],
         });
-        await dynamodb.transactWrite({ updateItems });
-        LOGGER.debug(`SUCCESS updateCollectionStatistics(): volumes`, {
-          timestamp,
-          slug,
-          chain,
-          marketplace,
-          volumes,
-          failureAttempt,
-          updateItems,
-        });
+        result.volumesResult[timestamp].result = true;
       } catch (e) {
         if (failureAttempt < 3) {
           failureAttempt++;
@@ -240,14 +249,15 @@ export class HistoricalStatistics {
             marketplace,
             volumes,
             failureAttempt,
-            updateItems,
+            result,
           });
-          HistoricalStatistics.updateCollectionStatistics({
+          return HistoricalStatistics.updateCollectionStatistics({
             slug,
             chain,
             marketplace,
             volumes,
             failureAttempt,
+            negate,
           });
         } else {
           LOGGER.alert(`updateCollectionStatistics()`, {
@@ -258,10 +268,15 @@ export class HistoricalStatistics {
             chain,
             marketplace,
             failureAttempt,
+            result,
           });
         }
       }
     }
+
+    LOGGER.debug(`updateCollectionStatistics()`, { result });
+
+    return result;
   }
 
   static async getDailyVolumesFromSales({ sales }: { sales: SaleData[] }) {
@@ -293,18 +308,12 @@ export class HistoricalStatistics {
     chain: Blockchain;
     marketplace: Marketplace;
     sales: SaleData[];
-  }) {
+  }): Promise<UpdateCollectionStatisticsResult> {
     try {
       const volumes = await HistoricalStatistics.getDailyVolumesFromSales({
         sales,
       });
-      LOGGER.debug(`updateStatistics()`, {
-        slug,
-        chain,
-        marketplace,
-        volumes,
-      });
-      await HistoricalStatistics.updateCollectionStatistics({
+      return await HistoricalStatistics.updateCollectionStatistics({
         slug,
         chain,
         marketplace,

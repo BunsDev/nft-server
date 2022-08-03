@@ -1,3 +1,5 @@
+import { TransactWriteItemsOutput } from "aws-sdk/clients/dynamodb";
+
 export enum Blockchain {
   Ethereum = "ethereum",
   Solana = "solana",
@@ -127,4 +129,23 @@ export type ERCStandard = {
 export type SerializedBigNumber = {
   hex?: string;
   type: string;
+};
+
+export type UpdateCollectionStatisticsResult = {
+  negate: boolean;
+  slug: string;
+  chain: Blockchain;
+  marketplace: Marketplace;
+  fromSales: {
+    didEnter: boolean;
+    result: boolean;
+    output: TransactWriteItemsOutput;
+  };
+  ranOverview: boolean;
+  volumesResult: {
+    [key: string]: {
+      result: boolean;
+      output: TransactWriteItemsOutput;
+    };
+  };
 };

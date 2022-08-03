@@ -492,13 +492,31 @@ export default class WyvernProvider
           });
           return eventMetadata;
         } else if (ERC1155TransferBatch) {
-          // TODO
-          LOGGER.warn(`TODO: ERC1155TransferBatch`, {
+          const [, seller, buyer] = ERC1155TransferBatch.decodedData;
+          eventMetadata = {
+            ...eventMetadata,
+            seller: ethers.utils.hexStripZeros(seller),
+            buyer: ethers.utils.hexStripZeros(buyer),
+            tokenID: null,
+            data: ERC1155TransferBatch.decodedData,
+          };
+          LOGGER.debug(`ERC1155TransferBatch`, {
             ...eventMetadata,
             tx: receipt.transactionHash,
           });
           return eventMetadata;
         }
+      } else {
+        const [, , maker, taker] = event.args;
+        eventMetadata.buyer = ethers.utils.hexStripZeros(maker);
+        eventMetadata.seller = ethers.utils.hexStripZeros(taker);
+        eventMetadata.contractAddress = this.contracts[chain].address;
+        eventMetadata.data = {
+          hash: receipt.transactionHash,
+          NON_STANDARD: true,
+          event,
+          preceedingLogs: logs.slice(0, eventIndex + 1),
+        };
       }
 
       this.warnNonStandardEventLogs(eventIndex, event, receipt);

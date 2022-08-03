@@ -33,7 +33,8 @@ export class Sale {
           .reduce((sales: any, sale) => {
             let slugStr = slug;
             if (!(typeof slugStr === "string")) {
-              slugStr = (<Record<string, any>>slug)[sale.contractAddress];
+              slugStr = (<Record<string, any>>slug)[sale.contractAddress]
+                .address;
             }
             const { timestamp, txnHash, ...data } = sale;
             const sortKeys = sales.map((sale: any) => sale.SK);

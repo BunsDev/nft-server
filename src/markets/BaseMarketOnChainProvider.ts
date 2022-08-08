@@ -37,6 +37,10 @@ export type EventMetadata = {
   };
   data: Result | Record<string, any>;
   count?: number;
+  hash: string;
+  contract: string;
+  bundleSale?: boolean;
+  logIndex: number;
 };
 export type ReceiptLike = {
   blockNumber: number;

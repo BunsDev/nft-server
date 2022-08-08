@@ -118,6 +118,9 @@ export interface SaleData {
   metadata?: Record<string, any>;
   count?: number;
   recordState?: RecordState;
+  bundleSale?: boolean;
+  contract: string;
+  logIndex: number;
 }
 
 export type HumanABI = string[] | string;

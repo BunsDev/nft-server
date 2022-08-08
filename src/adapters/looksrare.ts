@@ -124,6 +124,9 @@ async function runSales(provider: AdapterProvider): Promise<void> {
           chain,
           metadata: { payment, data },
           count: meta.count,
+          contract: meta.contract,
+          logIndex: meta.logIndex,
+          bundleSale: meta.bundleSale,
         });
       }
     }

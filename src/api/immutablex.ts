@@ -225,6 +225,9 @@ export class ImmutableX {
         sellerAddress: seller_address || "",
         chain: Blockchain.ImmutableX,
         marketplace: Marketplace.ImmutableX,
+        contract: Marketplace.ImmutableX as string,
+        logIndex: sale.order_id,
+        metadata: { sale },
       };
     });
   }

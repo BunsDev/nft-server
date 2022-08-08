@@ -1,8 +1,13 @@
+import { getLogger } from "../utils/logger";
 import { Marketplace, RecordState, SaleData } from "../types";
 import { handleError } from "../utils";
 import dynamodb from "../utils/dynamodb";
 
 const ONE_DAY_MILISECONDS = 86400 * 1000;
+
+const LOGGER = getLogger("SALE_MODEL", {
+  datadog: !!process.env.DATADOG_API_KEY,
+});
 
 export class Sale {
   txnHash: string;
@@ -31,23 +36,18 @@ export class Sale {
         const items = sales
           .slice(i, i + batchWriteStep)
           .reduce((sales: any, sale) => {
-            let slugStr = slug;
-            if (!(typeof slugStr === "string")) {
-              slugStr = (<Record<string, any>>slug)[sale.contractAddress]
-                .address;
-            }
             const { timestamp, txnHash, ...data } = sale;
             const sortKeys = sales.map((sale: any) => sale.SK);
-            const sortKey = `${timestamp}#txnHash#${txnHash}`;
+            const sortKey = `${timestamp}#txnHash#${txnHash}#${sale.logIndex}`;
             if (!sortKeys.includes(sortKey)) {
               sales.push({
-                PK: `sales#${
-                  slugStr || sale.contractAddress
-                }#marketplace#${marketplace}`,
+                PK: `sales#${sale.contractAddress}#marketplace#${marketplace}`,
                 SK: sortKey,
                 recordState: RecordState.UNPROCESSED,
                 ...data,
               });
+            } else {
+              LOGGER.alert(`Duplicate Sale Detected`, { sale });
             }
             return sales;
           }, []);

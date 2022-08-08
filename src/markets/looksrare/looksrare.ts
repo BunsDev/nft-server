@@ -88,7 +88,11 @@ export default class LooksRareProvider
         count: amount.toString(),
         data: {
           parsed,
+          event,
         },
+        hash: event.transactionHash,
+        contract: Marketplace.LooksRare as string,
+        logIndex: event.logIndex,
       });
     }
     return meta;

@@ -14,6 +14,7 @@ import { customMetricsReporter } from "../../utils/metrics";
 import { ClusterWorker, IClusterProvider } from "../../utils/cluster";
 import dynamodb from "../../utils/dynamodb";
 import BaseProvider from "../BaseProvider";
+import { Result } from "ethers/lib/utils";
 
 const LOGGER = getLogger("SEAPORT_PROVIDER", {
   datadog: !!process.env.DATADOG_API_KEY,
@@ -212,7 +213,10 @@ export default class SeaportProvider
             const parsedEvents = this.parseEvents(events, chain);
             for (let i = 0; i < events.length; i++) {
               const event = events[i];
-              const parsed = parsedEvents[i];
+              const parsed = parsedEvents.filter(
+                (pe) => pe.hash === event.transactionHash
+              );
+
               if (!(event.transactionHash in receipts)) {
                 receipts[event.transactionHash] = {
                   receipt: {
@@ -222,7 +226,21 @@ export default class SeaportProvider
                   meta: [] as Array<EventMetadata>,
                 };
               }
-              receipts[event.transactionHash].meta.push(parsed);
+
+              if (parsed.length > 1) {
+                const { offer, consideration } = parsed[0].data[0];
+                const bundle: EventMetadata = {
+                  ...parsed[0],
+                  data: {
+                    bundle: parsed.slice(1),
+                    shape: this.getOrderShape(offer, consideration),
+                  },
+                  bundleSale: true,
+                };
+                receipts[event.transactionHash].meta.push(bundle);
+              } else {
+                receipts[event.transactionHash].meta.push(...parsed);
+              }
             }
 
             yield {
@@ -293,12 +311,24 @@ export default class SeaportProvider
         continue;
       }
 
-      const shape = getSeaportShape(offer, consideration);
-      dynamodb.put({
-        PK: "seaportShape",
-        SK: shape,
-        tx: event.transactionHash,
-      });
+      // For dev stats
+      {
+        const shape = getSeaportShape(offer, consideration);
+        dynamodb.transactWrite({
+          updateItems: [
+            {
+              Key: {
+                PK: "seaportShape",
+                SK: shape,
+              },
+              UpdateExpression: `ADD count :count`,
+              ExpressionAttributeValues: {
+                ":count": 1,
+              },
+            },
+          ],
+        });
+      }
 
       const orderShape: OrderShape = this.getOrderShape(offer, consideration);
       switch (orderShape) {
@@ -337,7 +367,7 @@ export default class SeaportProvider
     return meta;
   }
 
-  public getOrderShape(offer: any, consideration: any): OrderShape {
+  public getOrderShape(offer: Result, consideration: Result): OrderShape {
     // Shapes
     // ERC20 : ERC721/1155+ , ERC20+?
     // ERC721/1155+ : NATIVE+ , ERC721/1155+
@@ -390,6 +420,9 @@ export default class SeaportProvider
               price: BigNumber.from(0),
               tokenID: null,
               count: 0,
+              hash: event.transactionHash,
+              contract: "seaport",
+              logIndex: event.logIndex,
             };
           }
           c[v.token] = {
@@ -444,6 +477,9 @@ export default class SeaportProvider
             price,
             tokenID: null,
             count: 0,
+            hash: event.transactionHash,
+            contract: "seaport",
+            logIndex: event.logIndex,
           };
         }
         c[v.token] = {
@@ -493,6 +529,9 @@ export default class SeaportProvider
             price,
             tokenID: null,
             count: 0,
+            hash: event.transactionHash,
+            contract: "seaport",
+            logIndex: event.logIndex,
           };
         }
         c[v.token] = {

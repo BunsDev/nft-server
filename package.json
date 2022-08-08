@@ -24,6 +24,7 @@
     "graphql-request": "^3.6.1",
     "moralis": "^0.0.78",
     "pg": "^8.7.1",
+    "redis": "^4.2.0",
     "reflect-metadata": "^0.1.13",
     "web3": "^1.6.1",
     "winston": "^3.7.2"

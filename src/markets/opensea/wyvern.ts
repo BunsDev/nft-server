@@ -371,7 +371,7 @@ export default class WyvernProvider
 
   private restoreEventWrap(event: Event, chain: Blockchain) {
     event.getTransactionReceipt = async (): Promise<TransactionReceipt> => {
-      return await this.chains[chain].firstRpcProvider.getTransactionReceipt(
+      return await this.chains[chain].getTransactionReceipt(
         event.transactionHash
       );
     };
@@ -382,6 +382,7 @@ export default class WyvernProvider
     receipt: TransactionReceipt,
     chain = Blockchain.Ethereum
   ): EventMetadata {
+    const { providerName } = this.config.chains[chain];
     const { logs } = receipt;
     const { price: originalPrice } = event.args;
     let eventMetadata: EventMetadata = {
@@ -396,6 +397,11 @@ export default class WyvernProvider
         address: DEFAULT_TOKEN_ADDRESSES[chain],
         amount: BigNumber.from(0),
       },
+      contract: providerName,
+      hash: event.transactionHash,
+      logIndex: event.logIndex,
+      bundleSale: false,
+      count: 1,
     };
 
     if (!originalPrice) {

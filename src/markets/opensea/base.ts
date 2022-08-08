@@ -192,7 +192,7 @@ export default abstract class OpenSeaBaseProvider {
         let retryCount = 0;
         while (true) {
           try {
-            this.blocks.set(i, this.chains[chain].provider.getBlock(i));
+            this.blocks.set(i, this.chains[chain].getBlock(i));
             await this.blocks.get(i);
 
             for (let j = i + 1; j <= toBlock; j++) {

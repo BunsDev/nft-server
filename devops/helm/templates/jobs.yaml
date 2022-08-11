@@ -1,0 +1,41 @@
+{{- range $.Values.adapters }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $.Chart.Name }}-{{ .name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    run: {{ $.Chart.Name }}-{{ .name }}
+spec:
+  suspend: {{ .suspend }}
+  template:
+    spec:
+      nodeSelector:
+        "node.kubernetes.io/instance-type": {{ quote (coalesce .node_selector $.Values.node_selector) }}
+      containers:
+        - name: {{ $.Chart.Name }}-{{ .name }}
+          image: {{ $.Values.image.repo }}:{{ coalesce .release $.Values.image.release }}
+          command: ['sh', '-c', 'npm run start-docker']
+          env:
+            - name: DEFILLAMA_NFT_ADAPTER
+              value: {{ .name }}
+          {{- range $k, $v := $.Values.adapter_env }}
+            - name: {{ $k }}
+              value: {{ quote $v }}
+          {{- end }}
+          {{- range .env }}
+            - name: {{ .name }}
+              value: {{ quote .value }}
+          {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ $.Chart.Name }}-env
+            - secretRef:
+                name: {{ $.Chart.Name }}-secrets
+          resources:
+            limits:
+              cpu: {{ .resources.limits.cpu }}
+              memory: {{ .resources.limits.memory }}
+      restartPolicy: Never
+{{- end}}

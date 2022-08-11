@@ -34,6 +34,7 @@
     "build": "tsc",
     "start": "node dist/adapters/index.js",
     "start-docker": "node adapters/index.js",
+    "crons": "node api/cron.js",
     "deploy": "sls deploy --stage prod",
     "dist": "sh ./scripts/dist.sh",
     "lint": "eslint -c .eslintrc.js --ext .ts src",

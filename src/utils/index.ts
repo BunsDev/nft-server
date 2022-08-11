@@ -248,7 +248,7 @@ export function restoreBigNumber(
   if (bigNum instanceof BigNumber) {
     return bigNum;
   }
-  return BigNumber.from(bigNum.hex);
+  return BigNumber.from(bigNum.hex || bigNum._hex);
 }
 
 export async function awaitSequence(

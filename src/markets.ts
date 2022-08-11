@@ -45,6 +45,8 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
           deployBlock: 5774644,
           contractAddress: "0x7Be8076f4EA4A4AD08075C2508e481d6C946D12b",
           saleEventName: "OrdersMatched",
+          saleTopic:
+            "0xc4109843e0b7d514e4c093114b863f8e7d8d9a458c372cd51bfe526b588006c9",
           deploymentEventName: "OwnershipTransferred",
           abi: [
             ...OwnableStandard,
@@ -60,6 +62,8 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
           deployBlock: 14232083,
           contractAddress: "0x7f268357a8c2552623316e2562d90e642bb538e5",
           saleEventName: "OrdersMatched",
+          saleTopic:
+            "0xc4109843e0b7d514e4c093114b863f8e7d8d9a458c372cd51bfe526b588006c9",
           deploymentEventName: "OwnershipTransferred",
           abi: [
             ...OwnableStandard,

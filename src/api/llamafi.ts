@@ -1,6 +1,11 @@
 import axios from "axios";
+import { getLogger } from "../utils/logger";
 import { LLAMA_FI_COIN_API } from "../constants";
 import { Blockchain } from "../types";
+
+const LOGGER = getLogger("LLAMAFI", {
+  datadog: !!process.env.DATADOG_API_KEY,
+});
 
 type PostBody = Record<string, string | number | Array<unknown>>;
 export type CoinResponse = {
@@ -46,13 +51,26 @@ export class LlamaFi {
       return [ts];
     });
     if (neededTimestamps.length) {
-      const response = await post({
-        coin,
-        timestamps: neededTimestamps,
-      });
-      if (response.data.prices && response.data.prices) {
-        neededTimestamps.forEach((ts, i) => {
-          prices[ts] = response.data.prices[i].price;
+      for (let i = 0; i < neededTimestamps.length; i += 200) {
+        const postTimestamps = neededTimestamps.slice(i, i + 200);
+        const response = await post({
+          coin,
+          timestamps: postTimestamps,
+        });
+        if (response.data.prices && response.data.prices) {
+          postTimestamps.forEach((ts, i) => {
+            prices[ts] = response.data.prices[i].price;
+          });
+        }
+      }
+
+      if (neededTimestamps.length !== Object.keys(prices).length) {
+        LOGGER.error(`getHistoricPricesByContract() timestamp length`, {
+          coin,
+          neededLen: neededTimestamps.length,
+          priceLen: Object.keys(prices).length,
+          min: Math.min(...neededTimestamps),
+          max: Math.max(...neededTimestamps),
         });
       }
     }

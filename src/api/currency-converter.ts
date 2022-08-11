@@ -245,28 +245,31 @@ export class CurrencyConverter {
 
     for (const chain of Object.keys(uniqueAddressesTimestamps.addresses)) {
       for (const address of uniqueAddressesTimestamps.addresses[chain]) {
-        LOGGER.debug(`Chain address`, { address });
-        try {
-          const saleTokenPrices = await LlamaFi.getHistoricPricesByContract(
-            address,
-            Object.values(timestampMap),
-            chain
-          );
-          LOGGER.debug(`Sale token prices`, {
-            chain,
-            address,
-            saleTokenPrices,
-          });
-          if (!(chain in prices)) prices[chain] = {};
-          prices[chain][address] = saleTokenPrices;
-        } catch (e) {
-          console.log(e);
-          LOGGER.error(`LlamaFi error`, {
-            e,
-            address,
-            sale: sales.find((s) => s.paymentTokenAddress === address),
-          });
-        }
+        let error = false;
+        do {
+          error = false;
+          try {
+            const saleTokenPrices = await LlamaFi.getHistoricPricesByContract(
+              address,
+              Object.values(timestampMap),
+              chain
+            );
+            LOGGER.debug(`Sale token prices`, {
+              chain,
+              address,
+              saleTokenPrices,
+            });
+            if (!(chain in prices)) prices[chain] = {};
+            prices[chain][address] = saleTokenPrices;
+          } catch (e) {
+            error = true;
+            LOGGER.error(`LlamaFi error`, {
+              e,
+              address,
+              sale: sales.find((s) => s.paymentTokenAddress === address),
+            });
+          }
+        } while (error);
       }
     }
 

@@ -80,6 +80,8 @@ export default class SeaportProvider
   public CONTRACT_NAME = "seaport";
   public market = Marketplace.Opensea;
 
+  private shapeCount: Record<string, number> = {};
+
   public withWorker(worker: ClusterWorker): void {
     super.withWorker(worker);
     this.MetricsReporter = customMetricsReporter("", "", [
@@ -214,7 +216,10 @@ export default class SeaportProvider
             for (let i = 0; i < events.length; i++) {
               const event = events[i];
               const parsed = parsedEvents.filter(
-                (pe) => pe.hash === event.transactionHash
+                (pe) =>
+                  pe &&
+                  pe.hash === event.transactionHash &&
+                  pe.logIndex === event.logIndex
               );
 
               if (!(event.transactionHash in receipts)) {
@@ -240,6 +245,37 @@ export default class SeaportProvider
                 receipts[event.transactionHash].meta.push(bundle);
               } else {
                 receipts[event.transactionHash].meta.push(...parsed);
+              }
+            }
+
+            // For dev stats
+            // eslint-disable-next-line no-lone-blocks
+            {
+              for (
+                let i = 0;
+                i < Object.keys(this.shapeCount).length;
+                i += 25
+              ) {
+                const updateItems = Object.keys(this.shapeCount)
+                  .slice(i, i + 25)
+                  .reduce((items, shape) => {
+                    items.push({
+                      Key: {
+                        PK: "seaportShape",
+                        SK: shape,
+                      },
+                      UpdateExpression: `ADD #count :count`,
+                      ExpressionAttributeNames: {
+                        "#count": "count",
+                      },
+                      ExpressionAttributeValues: {
+                        ":count": this.shapeCount[shape],
+                      },
+                    });
+                    this.shapeCount[shape] = 0;
+                    return items;
+                  }, []);
+                await dynamodb.transactWrite({ updateItems });
               }
             }
 
@@ -314,20 +350,9 @@ export default class SeaportProvider
       // For dev stats
       {
         const shape = getSeaportShape(offer, consideration);
-        dynamodb.transactWrite({
-          updateItems: [
-            {
-              Key: {
-                PK: "seaportShape",
-                SK: shape,
-              },
-              UpdateExpression: `ADD count :count`,
-              ExpressionAttributeValues: {
-                ":count": 1,
-              },
-            },
-          ],
-        });
+        this.shapeCount[shape] = this.shapeCount[shape]
+          ? this.shapeCount[shape] + 1
+          : 1;
       }
 
       const orderShape: OrderShape = this.getOrderShape(offer, consideration);

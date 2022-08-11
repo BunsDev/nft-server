@@ -1,0 +1,6 @@
+apiVersion: v2
+name: nft-server
+description: DefiLlama NFT Server
+type: application
+version: 0.1.0
+appVersion: "0.0.19"

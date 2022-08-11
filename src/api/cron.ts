@@ -8,7 +8,7 @@ import { getDeferred } from "../utils/cluster";
 import dynamodb, { getClient, getTableClient } from "../utils/dynamodb";
 import { CronConfig } from "./crons/types";
 import { getLogger } from "../utils/logger";
-import { fork } from "child_process";
+import { ChildProcess, fork } from "child_process";
 
 const LOGGER = getLogger("CRON_RUNNER", {
   datadog: !!process.env.DATADOG_API_KEY,
@@ -27,8 +27,10 @@ const ddbClient = dynamodb;
 const isPrimary = cluster.isPrimary || cluster.isMaster;
 
 interface Cron {
-  (config: CronConfig): Promise<any>;
+  (config: CronConfig | string): Promise<any>;
   runtime?: number;
+  fork?(): ChildProcess;
+  autostart?: boolean;
 }
 
 (async () => {
@@ -58,17 +60,26 @@ interface Cron {
 
 async function main() {
   const promises: Array<Promise<any>> = [];
-  const forks: Array<Worker> = [];
+  const forks: Array<Worker | ChildProcess> = [];
   for (const cron of Object.keys(crons)) {
+    const cronFn: Cron = crons[cron as keyof typeof crons];
     const deferred = getDeferred<any>();
     promises.push(deferred.promise);
-    const fork = cluster.fork({
-      RUN_CRON_NAME: cron,
-    });
-    fork.on("exit", (worker: Worker, code: number, signal: string) =>
-      deferred.resolve({ cron, code, signal })
-    );
-    forks.push(fork);
+    if (cronFn.fork) {
+      const fork = cronFn.fork();
+      fork.on("exit", (worker: Worker, code: number, signal: string) =>
+        deferred.resolve({ cron, code, signal })
+      );
+      forks.push(fork);
+    } else if (cronFn.autostart) {
+      const fork = cluster.fork({
+        RUN_CRON_NAME: cron,
+      });
+      fork.on("exit", (worker: Worker, code: number, signal: string) =>
+        deferred.resolve({ cron, code, signal })
+      );
+      forks.push(fork);
+    }
   }
   process.on("SIGTERM", () => {
     forks.forEach((f) => f.disconnect());

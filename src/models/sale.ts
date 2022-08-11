@@ -4,10 +4,18 @@ import { handleError } from "../utils";
 import dynamodb from "../utils/dynamodb";
 
 const ONE_DAY_MILISECONDS = 86400 * 1000;
+// 400K minus 1%
+const DYNAMODB_MAX_SIZE = 4e5 - (4e5 * 0.01);
 
 const LOGGER = getLogger("SALE_MODEL", {
   datadog: !!process.env.DATADOG_API_KEY,
 });
+
+type SaleMetadata = {
+  PK: string;
+  SK: string;
+  metadata: any;
+};
 
 export class Sale {
   txnHash: string;
@@ -51,6 +59,32 @@ export class Sale {
             }
             return sales;
           }, []);
+        const extractMetadata =
+          Math.max(...items.map((item: any) => JSON.stringify(item).length)) >
+          DYNAMODB_MAX_SIZE;
+        if (extractMetadata) {
+          const metadata: Array<SaleMetadata> = [];
+          try {
+            items.forEach((i: any) => {
+              if (!(JSON.stringify(i.metadata).length > DYNAMODB_MAX_SIZE)) {
+                metadata.push({
+                  PK: "sale#metadata",
+                  SK: i.SK,
+                  metadata: i.metadata,
+                });
+              } else {
+                LOGGER.warn(`Large metadata`, {
+                  SK: i.SK,
+                  metdata: i.metadata,
+                });
+              }
+              i.metadata = null;
+            });
+            await dynamodb.batchWrite(metadata);
+          } catch (e) {
+            LOGGER.alert(`Sale metadata failure`, { metadata, e });
+          }
+        }
         await dynamodb.batchWrite(items);
       }
       return true;

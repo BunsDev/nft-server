@@ -131,6 +131,7 @@ export type ERCStandard = {
 
 export type SerializedBigNumber = {
   hex?: string;
+  _hex?: string;
   type: string;
 };
 

@@ -59,7 +59,9 @@ export class LlamaFi {
         });
         if (response.data.prices && response.data.prices) {
           postTimestamps.forEach((ts, i) => {
-            prices[ts] = response.data.prices[i].price;
+            if (response.data.prices[i]?.price) {
+              prices[ts] = response.data.prices[i]?.price;
+            }
           });
         }
       }

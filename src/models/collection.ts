@@ -1,4 +1,3 @@
-import { LooksRare } from "../api/looksrare";
 import { Opensea } from "../api/opensea";
 import { CHAIN_MARKETPLACES } from "../constants";
 import {
@@ -505,11 +504,13 @@ export class Collection {
     marketplace,
     limit = null,
     cursor = null,
+    returnAll = false,
   }: {
     chain?: Blockchain;
     marketplace?: Marketplace;
     limit?: string;
     cursor?: string;
+    returnAll?: boolean;
   }) {
     let category = "collections";
 
@@ -520,29 +521,45 @@ export class Collection {
       category = `collections#marketplace#${marketplace}`;
     }
 
+    const collections = [];
+
     if (category) {
-      return dynamodb
-        .query({
-          IndexName: process.env.COLLECTION_INDEX ?? "collectionsIndex",
-          KeyConditionExpression: "category = :category",
-          ExpressionAttributeValues: {
-            ":category": category,
-          },
-          ScanIndexForward: false,
-          ...(limit && { Limit: parseInt(limit) }),
-          ...(cursor && { ExclusiveStartKey: JSON.parse(cursor) }),
-        })
-        .then((result) => {
-          const { Items, LastEvaluatedKey } = result;
-          return {
-            data: Items.map((item: any) => ({
-              ...item,
-              slug: getSlugFromPK(item.PK),
-            })),
-            ...(LastEvaluatedKey && { cursor: LastEvaluatedKey }),
-          };
-        });
+      do {
+        const result = await dynamodb
+          .query({
+            IndexName: process.env.COLLECTION_INDEX ?? "collectionsIndex",
+            KeyConditionExpression: "category = :category",
+            ExpressionAttributeValues: {
+              ":category": category,
+            },
+            ScanIndexForward: false,
+            ...(limit && { Limit: parseInt(limit) }),
+            ...(cursor && { ExclusiveStartKey: JSON.parse(cursor) }),
+          })
+          .then((result) => {
+            const { Items, LastEvaluatedKey } = result;
+            return {
+              data: Items.map((item: any) => ({
+                ...item,
+                slug: getSlugFromPK(item.PK),
+              })),
+              ...(LastEvaluatedKey && { cursor: LastEvaluatedKey }),
+            };
+          });
+
+        if (!returnAll) {
+          return result;
+        }
+
+        collections.push(...result.data);
+        cursor = null;
+        if (returnAll && result.cursor) {
+          cursor = JSON.stringify(result.cursor);
+        }
+      } while (cursor);
     }
+
+    return { data: collections, cursor };
   }
 
   static async getCount() {

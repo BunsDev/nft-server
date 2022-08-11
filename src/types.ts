@@ -121,6 +121,7 @@ export interface SaleData {
   bundleSale?: boolean;
   contract: string;
   logIndex: number;
+  hasCollection?: boolean;
 }
 
 export type HumanABI = string[] | string;

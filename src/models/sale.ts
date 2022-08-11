@@ -44,14 +44,16 @@ export class Sale {
         const items = sales
           .slice(i, i + batchWriteStep)
           .reduce((sales: any, sale) => {
-            const { timestamp, txnHash, ...data } = sale;
+            const { timestamp, txnHash, hasCollection, ...data } = sale;
             const sortKeys = sales.map((sale: any) => sale.SK);
             const sortKey = `${timestamp}#txnHash#${txnHash}#${sale.logIndex}`;
             if (!sortKeys.includes(sortKey)) {
               sales.push({
                 PK: `sales#${sale.contractAddress}#marketplace#${marketplace}`,
                 SK: sortKey,
-                recordState: RecordState.UNPROCESSED,
+                recordState: hasCollection
+                  ? RecordState.COLLECTION_EXISTS
+                  : RecordState.UNPROCESSED,
                 ...data,
               });
             } else {

@@ -48,6 +48,7 @@ const LOGGER = getLogger("LOOKSRARE_ADAPTER", {
 async function runSales(provider: AdapterProvider): Promise<void> {
   const { data: collections } = await Collection.getSorted({
     marketplace: Marketplace.LooksRare,
+    returnAll: true,
   });
 
   const collectionMap: Record<string, any> = collections.reduce((m, c) => {
@@ -127,6 +128,7 @@ async function runSales(provider: AdapterProvider): Promise<void> {
           contract: meta.contract,
           logIndex: meta.logIndex,
           bundleSale: meta.bundleSale,
+          hasCollection: !!collectionMap[contractAddress],
         });
       }
     }

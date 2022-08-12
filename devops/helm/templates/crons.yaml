@@ -1,38 +1,34 @@
+{{- range $.Values.crons }}
 ---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: {{ $.Chart.Name }}-crons
+  name: {{ $.Chart.Name }}-cron-{{ lower .name }}
   namespace: {{ $.Values.namespace }}
 spec:
-  schedule: "@hourly"
+  schedule: {{ quote (coalesce .schedule $.Values.cron_defaults.schedule) }}
+  suspend: {{ coalesce .suspend $.Values.cron_defaults.suspend }}
   jobTemplate:
     spec:
-      suspend: true
       template:
         spec:
           nodeSelector:
             "node.kubernetes.io/instance-type": {{ quote (coalesce .node_selector $.Values.node_selector) }}
           containers:
-          {{- range $.Values.crons }}
             - name: {{ lower .name }}
-              image: {{ $.Values.image.repo }}:{{ coalesce .release $.Values.image.release }}
+              image: {{ $.Values.image.repo }}:{{ coalesce .release $.Values.cron_defaults.image.release $.Values.image.release }}
               command: ['sh', '-c', 'npm run crons']
               env:
                 - name: RUN_CRON_NAME
                   value: {{ .name }}
-              {{- range $k, $v := $.Values.adapter_env }}
+              {{- range $k, $v := (mergeOverwrite $.Values.adapter_env $.Values.cron_defaults.env (coalesce .env (dict))) }}
                 - name: {{ $k }}
                   value: {{ quote $v }}
-              {{- end }}
-              {{- range .env }}
-                - name: {{ .name }}
-                  value: {{ quote .value }}
               {{- end }}
               envFrom:
                 - configMapRef:
                     name: {{ $.Chart.Name }}-env
                 - secretRef:
                     name: {{ $.Chart.Name }}-secrets
-          {{- end}}
           restartPolicy: Never
+{{- end}}

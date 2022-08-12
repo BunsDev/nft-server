@@ -253,8 +253,11 @@ async function replaceSale(
     newSK,
     oldSK,
   });
+  const recordState = sale.recordState
+    ? sale.recordState
+    : RecordState.COLLECTION_EXISTS;
   return await awaitSequence(
-    () => dynamodb.put({ ...sale, PK, SK: newSK }),
+    () => dynamodb.put({ ...sale, PK, SK: newSK, recordState }),
     () => dynamodb.delete({ Key: { PK, SK: oldSK } })
   );
 }

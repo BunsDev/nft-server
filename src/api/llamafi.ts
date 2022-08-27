@@ -98,7 +98,9 @@ function cacheResponse(request: PostBody, response: string) {
     if (!(coin in PRICE_CACHE)) {
       PRICE_CACHE[coin] = new Map<number, number>();
     }
-    PRICE_CACHE[coin].set(reqTimestamps[i], coinRes.prices[i].price);
+    if (coinRes.prices[i]) {
+      PRICE_CACHE[coin].set(reqTimestamps[i], coinRes.prices[i].price);
+    }
   }
   return coinRes;
 }

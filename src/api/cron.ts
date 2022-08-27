@@ -27,16 +27,17 @@ const ddbClient = dynamodb;
 const isPrimary = cluster.isPrimary || cluster.isMaster;
 
 interface Cron {
-  (config: CronConfig | string): Promise<any>;
+  (config: CronConfig | string | Array<string>): Promise<any>;
   runtime?: number;
   fork?(): ChildProcess;
-  autostart?: boolean;
 }
 
 (async () => {
-  if (isPrimary && !process.env.RUN_CRON_NAME) {
-    await main();
-  } else if (process.env.RUN_CRON_NAME && process.env.RUN_CRON_NAME in crons) {
+  if (
+    isPrimary &&
+    process.env.RUN_CRON_NAME &&
+    process.env.RUN_CRON_NAME in crons
+  ) {
     const cronName = process.env.RUN_CRON_NAME;
     const cron: Cron = crons[cronName as keyof typeof crons];
     const runtime = cron.runtime;
@@ -44,48 +45,35 @@ interface Cron {
       (resolve) => runtime && setTimeout(() => resolve(0), runtime)
     );
     let result = null;
-    try {
-      result = await cron({
-        promise,
-        ddbClient,
+    let error = null;
+    if (cron.fork) {
+      const deferred = getDeferred<any>();
+      const f = cron.fork();
+      f.on("exit", (worker: Worker, code: number, signal: string) =>
+        deferred.resolve(code)
+      );
+      f.on("error", (e) => {
+        deferred.reject(e);
       });
-    } catch (e) {
-      result = 1;
+      try {
+        result = await deferred.promise;
+      } catch (e) {
+        error = e;
+        result = 1;
+      }
+    } else {
+      try {
+        result = await cron({
+          promise,
+          ddbClient,
+        });
+      } catch (e) {
+        error = e;
+        result = 1;
+      }
     }
-    LOGGER.info(`Cron: ${cronName} Exited`, { cronName, result });
+    LOGGER.info(`Cron: ${cronName} Exited`, { cronName, result, error });
     // eslint-disable-next-line no-process-exit
     process.exit(result);
   }
 })();
-
-async function main() {
-  const promises: Array<Promise<any>> = [];
-  const forks: Array<Worker | ChildProcess> = [];
-  for (const cron of Object.keys(crons)) {
-    const cronFn: Cron = crons[cron as keyof typeof crons];
-    const deferred = getDeferred<any>();
-    promises.push(deferred.promise);
-    if (cronFn.fork) {
-      const fork = cronFn.fork();
-      fork.on("exit", (worker: Worker, code: number, signal: string) =>
-        deferred.resolve({ cron, code, signal })
-      );
-      forks.push(fork);
-    } else if (cronFn.autostart) {
-      const fork = cluster.fork({
-        RUN_CRON_NAME: cron,
-      });
-      fork.on("exit", (worker: Worker, code: number, signal: string) =>
-        deferred.resolve({ cron, code, signal })
-      );
-      forks.push(fork);
-    }
-  }
-  process.on("SIGTERM", () => {
-    forks.forEach((f) => f.disconnect());
-  });
-  const results = await Promise.allSettled(promises);
-  console.log(results);
-  // eslint-disable-next-line no-process-exit
-  process.exit(0);
-}

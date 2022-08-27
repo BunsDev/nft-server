@@ -66,7 +66,7 @@ export default async function main(config: CronConfig) {
     try {
       currentQuery = await ddbClient.query({
         IndexName: `saleStateIndex`,
-        ScanIndexForward: false,
+        ScanIndexForward: true,
         KeyConditionExpression: "recordState = :UNPROCESSED",
         Limit: 1000,
         ProjectionExpression: `PK, SK, contractAddress, price, priceBase, priceUSD, marketplace, chain`,

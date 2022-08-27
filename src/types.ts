@@ -1,4 +1,5 @@
 import { TransactWriteItemsOutput } from "aws-sdk/clients/dynamodb";
+import { ONE_DAY_MILISECONDS, ONE_HOUR_MILISECONDS, ONE_WEEK_MILISECONDS } from "./constants";
 
 export enum Blockchain {
   Ethereum = "ethereum",
@@ -103,6 +104,15 @@ export enum RecordState {
   VOLUME_RECORDED = 2,
 }
 
+export enum StatType {
+  DAILY_COLLECTION = "0",
+  DAILY_GLOBAL = "1",
+  WEEKLY_COLLECTION = "2",
+  WEEKLY_GLOBAL = "3",
+  HOURLY_COLLECTION = "4",
+  HOURLY_GLOBAL = "5",
+}
+
 export interface SaleData {
   txnHash: string;
   timestamp: string; // timestamp in milliseconds
@@ -122,6 +132,14 @@ export interface SaleData {
   contract: string;
   logIndex: number;
   hasCollection?: boolean;
+  priceConfirmed?: boolean;
+  tokenID?: string;
+  blockNumber?: number;
+}
+
+export interface SaleRecord extends SaleData {
+  PK: string;
+  SK: string;
 }
 
 export type HumanABI = string[] | string;
@@ -154,3 +172,18 @@ export type UpdateCollectionStatisticsResult = {
     };
   };
 };
+
+export type VolumeRecord = {
+  volume?: number;
+  volumeUSD?: number;
+};
+
+export type DailyVolumeRecord = {
+  [key: number | string]: VolumeRecord;
+};
+
+export enum DateTruncate {
+  HOUR = 3600 * 1000,
+  DAY = 86400 * 1000,
+  WEEK = 7 * 86400 * 1000,
+}

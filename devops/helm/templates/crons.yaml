@@ -6,6 +6,7 @@ metadata:
   name: {{ $.Chart.Name }}-cron-{{ lower .name }}
   namespace: {{ $.Values.namespace }}
 spec:
+  concurrencyPolicy: {{ coalesce .concurrency $.Values.cron_defaults.concurrency }}
   schedule: {{ quote (coalesce .schedule $.Values.cron_defaults.schedule) }}
   suspend: {{ coalesce .suspend $.Values.cron_defaults.suspend }}
   jobTemplate:
@@ -21,7 +22,7 @@ spec:
               env:
                 - name: RUN_CRON_NAME
                   value: {{ .name }}
-              {{- range $k, $v := (mergeOverwrite $.Values.adapter_env $.Values.cron_defaults.env (coalesce .env (dict))) }}
+              {{- range $k, $v := (mergeOverwrite (dict) $.Values.adapter_env $.Values.cron_defaults.env (coalesce .env (dict))) }}
                 - name: {{ $k }}
                   value: {{ quote $v }}
               {{- end }}

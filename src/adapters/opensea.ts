@@ -45,6 +45,9 @@ async function runSales(provider: AdapterProvider): Promise<void> {
     returnAll: true,
   });
 
+  // const collections = [];
+  // const collectionMap: Record<string, any> = {};
+
   const collectionMap: Record<string, any> = collections.reduce((m, c) => {
     m[c.address] = c;
     return m;
@@ -64,16 +67,18 @@ async function runSales(provider: AdapterProvider): Promise<void> {
       receipts,
       blocks: blockMap,
       providerName,
+      adapterRunName,
     } = (await nextSales).value as ChainEvents;
     LOGGER.info(`Got ${events.length} sales`);
 
     if (!events.length) {
-      AdapterState.updateSalesLastSyncedBlockNumber(
-        Marketplace.Opensea,
-        blockRange.endBlock,
-        chain,
-        providerName
-      );
+      blockRange?.endBlock &&
+        AdapterState.updateSalesLastSyncedBlockNumber(
+          Marketplace.Opensea,
+          blockRange.endBlock,
+          chain,
+          adapterRunName ?? providerName
+        );
       nextSales = itSales.next();
       continue;
     }
@@ -123,6 +128,8 @@ async function runSales(provider: AdapterProvider): Promise<void> {
           logIndex: meta.logIndex,
           bundleSale: meta.bundleSale,
           hasCollection: !!collectionMap[contractAddress],
+          tokenID: (meta.tokenID ?? "").toString(),
+          blockNumber: meta.blockNumber,
         });
       }
     }
@@ -158,12 +165,13 @@ async function runSales(provider: AdapterProvider): Promise<void> {
       });
     }
 
-    AdapterState.updateSalesLastSyncedBlockNumber(
-      Marketplace.Opensea,
-      blockRange.endBlock,
-      chain,
-      providerName
-    );
+    blockRange?.endBlock &&
+      AdapterState.updateSalesLastSyncedBlockNumber(
+        Marketplace.Opensea,
+        blockRange.endBlock,
+        chain,
+        adapterRunName ?? providerName
+      );
     nextSales = itSales.next();
   }
 }
@@ -195,7 +203,7 @@ function spawnProviderChild(p: AdapterProviderConfig, run = 0) {
   });
 }
 
-if (!process.argv[2]) {
+if (!process.argv[2] && !process.env.RUN_CRON_NAME) {
   OpenSeaProvider.build(OpenSeaMarketConfig).forEach((p) =>
     spawnProviderChild(p)
   );

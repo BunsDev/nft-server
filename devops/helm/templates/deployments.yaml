@@ -1,15 +1,24 @@
 {{- range $.Values.adapters }}
 ---
-apiVersion: batch/v1
-kind: Job
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: {{ $.Chart.Name }}-{{ .name }}
   namespace: {{ $.Values.namespace }}
   labels:
-    run: {{ $.Chart.Name }}-{{ .name }}
+    app: {{ $.Chart.Name }}-{{ .name }}
 spec:
-  suspend: {{ .suspend }}
+  replicas: {{ .replicas }}
+  paused: {{ .suspend }}
+  selector:
+    matchLabels:
+      app: {{ $.Chart.Name }}-{{ .name }}
+  strategy:
+    type: Recreate
   template:
+    metadata:
+      labels:
+        app: {{ $.Chart.Name }}-{{ .name }}
     spec:
       nodeSelector:
         "node.kubernetes.io/instance-type": {{ quote (coalesce .node_selector $.Values.node_selector) }}
@@ -19,7 +28,7 @@ spec:
           command: ['sh', '-c', 'npm run start-docker']
           env:
             - name: DEFILLAMA_NFT_ADAPTER
-              value: {{ .name }}
+              value: {{ coalesce .adapter .name }}
           {{- range $k, $v := $.Values.adapter_env }}
             - name: {{ $k }}
               value: {{ quote $v }}
@@ -35,7 +44,7 @@ spec:
                 name: {{ $.Chart.Name }}-secrets
           resources:
             limits:
-              cpu: {{ .resources.limits.cpu }}
-              memory: {{ .resources.limits.memory }}
-      restartPolicy: Never
+              cpu: {{ coalesce .limits_cpu $.Values.adapter_defaults.resources.limits.cpu }}
+              memory: {{ coalesce .limits_memory $.Values.adapter_defaults.resources.limits.memory }}
+      restartPolicy: Always
 {{- end}}

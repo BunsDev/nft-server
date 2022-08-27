@@ -2,9 +2,18 @@ import axios from "axios";
 import web3 from "web3";
 import { Block } from "web3-eth";
 import { Log } from "web3-core";
-import { Blockchain, Marketplace, SaleData, SerializedBigNumber } from "../types";
+import {
+  Blockchain,
+  DailyVolumeRecord,
+  DateTruncate,
+  Marketplace,
+  SaleData,
+  SerializedBigNumber,
+  StatType,
+} from "../types";
 import { getLogger } from "./logger";
 import { BigNumber } from "ethers";
+import { ONE_DAY_MILISECONDS } from "../constants";
 
 const LOGGER = getLogger("ERROR_HANDLER", {
   datadog: !!process.env.DATADOG_API_KEY,
@@ -252,7 +261,90 @@ export function restoreBigNumber(
 }
 
 export async function awaitSequence(
-  ...promiseFns: Array<() => Promise<unknown>>
+  ...promiseFns: Array<(val: any) => Promise<unknown>>
 ): Promise<unknown> {
   return promiseFns.reduce((p, fn) => p.then(fn), Promise.resolve(!0));
+}
+
+export function fillMissingVolumeRecord(
+  volumes: DailyVolumeRecord,
+  timestamps: Array<number> = [],
+  step = ONE_DAY_MILISECONDS
+): DailyVolumeRecord {
+  if (!timestamps.length) {
+    timestamps = Object.keys(volumes).map((_) => parseInt(_));
+  }
+  const [start, end] = [Math.min(...timestamps), Math.max(...timestamps)];
+  for (let i = start; i <= end; i += step) {
+    if (!(i in volumes)) {
+      volumes[i] = {
+        volume: 0,
+        volumeUSD: 0,
+      };
+    }
+  }
+
+  return volumes;
+}
+
+export function mergeDailyVolumeRecords(
+  ...dailyVolumeRecords: Array<DailyVolumeRecord>
+): DailyVolumeRecord {
+  const volumes: DailyVolumeRecord = {};
+  for (const dailyVolume of dailyVolumeRecords) {
+    for (const [timestamp, volumeRecord] of Object.entries(dailyVolume)) {
+      if (!(timestamp in volumes)) {
+        volumes[timestamp] = {
+          volume: 0,
+          volumeUSD: 0,
+        };
+      }
+
+      volumes[timestamp].volume += volumeRecord.volume ?? 0;
+      volumes[timestamp].volumeUSD += volumeRecord.volumeUSD ?? 0;
+    }
+  }
+  return volumes;
+}
+
+export function truncateDate(timestamp: number, truncate = DateTruncate.DAY) {
+  switch (truncate) {
+    case DateTruncate.HOUR:
+    case DateTruncate.DAY:
+      return timestamp - (timestamp % truncate);
+    case DateTruncate.WEEK:
+      timestamp = truncateDate(timestamp);
+      // eslint-disable-next-line no-case-declarations
+      const day = new Date(timestamp).getUTCDay();
+      return timestamp - day * DateTruncate.DAY;
+  }
+}
+
+export function extendDate(
+  timestamp: number,
+  extension = DateTruncate.DAY,
+  toEndOf = true
+) {
+  switch (extension) {
+    case DateTruncate.HOUR:
+    case DateTruncate.DAY:
+      return truncateDate(timestamp, extension) + extension - (toEndOf ? 1 : 0);
+    case DateTruncate.WEEK:
+      timestamp = truncateDate(timestamp);
+      // eslint-disable-next-line no-case-declarations
+      const day = new Date(timestamp).getUTCDay();
+      return timestamp + (7 - day) * DateTruncate.DAY - (toEndOf ? 1 : 0);
+  }
+}
+
+export function getDateTruncateForStatType(statType: StatType) {
+  switch (statType) {
+    case StatType.WEEKLY_COLLECTION:
+      return DateTruncate.WEEK;
+    case StatType.HOURLY_COLLECTION:
+      return DateTruncate.HOUR;
+    case StatType.DAILY_COLLECTION:
+    default:
+      return DateTruncate.DAY;
+  }
 }

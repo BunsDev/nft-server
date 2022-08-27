@@ -5,7 +5,7 @@ import dynamodb from "../utils/dynamodb";
 
 const ONE_DAY_MILISECONDS = 86400 * 1000;
 // 400K minus 1%
-const DYNAMODB_MAX_SIZE = 4e5 - (4e5 * 0.01);
+const DYNAMODB_MAX_SIZE = 4e5 - 4e5 * 0.01;
 
 const LOGGER = getLogger("SALE_MODEL", {
   datadog: !!process.env.DATADOG_API_KEY,
@@ -41,15 +41,26 @@ export class Sale {
     try {
       const batchWriteStep = 25;
       for (let i = 0; i < sales.length; i += batchWriteStep) {
+        const deleteLegacy: Array<{
+          PK: string;
+          SK: string;
+        }> = [];
         const items = sales
           .slice(i, i + batchWriteStep)
           .reduce((sales: any, sale) => {
             const { timestamp, txnHash, hasCollection, ...data } = sale;
             const sortKeys = sales.map((sale: any) => sale.SK);
+            const legacySK = `${timestamp}#txnHash#${txnHash}`;
             const sortKey = `${timestamp}#txnHash#${txnHash}#${sale.logIndex}`;
+            const saleSlug =
+              typeof slug === "string" ? slug : sale.contractAddress;
             if (!sortKeys.includes(sortKey)) {
+              deleteLegacy.push({
+                PK: `sales#${saleSlug}#marketplace#${marketplace}`,
+                SK: legacySK,
+              });
               sales.push({
-                PK: `sales#${sale.contractAddress}#marketplace#${marketplace}`,
+                PK: `sales#${saleSlug}#marketplace#${marketplace}`,
                 SK: sortKey,
                 recordState: hasCollection
                   ? RecordState.COLLECTION_EXISTS
@@ -88,6 +99,9 @@ export class Sale {
           }
         }
         await dynamodb.batchWrite(items);
+        for (const Key of deleteLegacy) {
+          await dynamodb.delete({ Key });
+        }
       }
       return true;
     } catch (e) {

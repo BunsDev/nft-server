@@ -41,6 +41,7 @@ export type EventMetadata = {
   contract: string;
   bundleSale?: boolean;
   logIndex: number;
+  blockNumber?: number;
 };
 export type ReceiptLike = {
   blockNumber: number;
@@ -63,6 +64,7 @@ export type ChainEvents = {
   receipts?: TxReceiptsWithMetadata;
   blocks?: Record<string, Block>;
   providerName: string;
+  adapterRunName?: string;
 };
 export type SaleEvents = Partial<Record<Blockchain, Array<ChainEvents>>>;
 export type SaleEventFragments = Partial<Record<Blockchain, EventFragment>>;

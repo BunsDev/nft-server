@@ -1,3 +1,5 @@
+import { IMarketOnChainProvider } from "../interfaces";
+import { IClusterProvider } from "../utils/cluster";
 import { MarketChainConfig, MarketConfig, MultiMarketConfig } from "../markets";
 import { Blockchain } from "../types";
 import osproviders from "./opensea";
@@ -21,9 +23,16 @@ const providers = osproviders as Record<string, any>;
  * general outline of OS for example.
  */
 
+export type MarketProvider = {
+  chain: Blockchain;
+  providerConfig: MarketConfig;
+  chainConfig: MarketChainConfig;
+  instantiate(): IMarketOnChainProvider & IClusterProvider;
+};
+
 export class OpenSeaProvider {
   static build(config: MultiMarketConfig) {
-    const marketProviders = [];
+    const marketProviders: Array<MarketProvider> = [];
     const chains = Object.keys(config.chains) as Array<Blockchain>;
 
     for (const chain of chains) {
@@ -33,20 +42,29 @@ export class OpenSeaProvider {
         if (!chainConfig.enabled) {
           continue;
         }
+        const { providerName } = chainConfig;
+        if (process.env.ADAPTER_REPROCESS) {
+          if (providerName !== process.env.ADAPTER_REPROCESS) {
+            continue;
+          }
+          chainConfig.deployBlock = parseInt(
+            process.env.ADAPTER_REPROCESS_START_BLOCK
+          );
+          chainConfig.adapterRunName = `${chainConfig.providerName}-REPROCESS-${chainConfig.deployBlock}`;
+        }
         const providerConfig: MarketConfig = {
           chains: {
             [chain]: chainConfig,
           },
         };
-        providerConfig.chains[chain] = chainConfig;
         marketProviders.push({
           chain,
           providerConfig,
           chainConfig,
           instantiate() {
-            return new providers[this.chainConfig.providerName](
+            return new providers[providerName](
               this.providerConfig,
-              this.chainConfig.providerName
+              providerName
             );
           },
         });

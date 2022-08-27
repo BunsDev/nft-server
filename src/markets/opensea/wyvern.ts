@@ -8,14 +8,16 @@ import {
   EventLogType,
   LogType,
 } from "../BaseMarketOnChainProvider";
-import { Blockchain, Marketplace } from "../../types";
+import { Blockchain, Marketplace, RecordState } from "../../types";
 import { AdapterState } from "../../models";
 import { TransactionReceipt, Log, Block } from "@ethersproject/providers";
 import { DEFAULT_TOKEN_ADDRESSES } from "../../constants";
 import { customMetricsReporter } from "../../utils/metrics";
 import { ClusterWorker, IClusterProvider } from "../../utils/cluster";
-import { restoreBigNumber } from "../../utils";
+import { restoreBigNumber, sleep } from "../../utils";
 import BaseProvider from "../BaseProvider";
+import { Key } from "aws-sdk/clients/dynamodb";
+import dynamodb from "../../utils/dynamodb";
 
 const LOGGER = getLogger("OPENSEA_PROVIDER", {
   datadog: !!process.env.DATADOG_API_KEY,
@@ -63,7 +65,7 @@ export default class WyvernProvider
   public async *fetchSales(): AsyncGenerator<ChainEvents> {
     // eslint-disable-next-line no-unreachable-loop
     for (const chain of Object.keys(this.chains) as Blockchain[]) {
-      const { deployBlock, contractAddress, providerName } =
+      const { deployBlock, contractAddress, providerName, adapterRunName } =
         this.config.chains[chain];
       const currentBlock: number = await this.chains[
         chain
@@ -74,7 +76,7 @@ export default class WyvernProvider
         chain,
         true,
         deployBlock,
-        providerName
+        adapterRunName ?? providerName
       );
       if (deployBlock && Number.isInteger(deployBlock)) {
         if (lastSyncedBlockNumber < deployBlock) {
@@ -82,7 +84,7 @@ export default class WyvernProvider
             Marketplace.Opensea,
             deployBlock,
             chain,
-            providerName
+            adapterRunName ?? providerName
           );
         }
         lastSyncedBlockNumber = Math.max(deployBlock, lastSyncedBlockNumber);
@@ -219,6 +221,7 @@ export default class WyvernProvider
               },
               receipts,
               providerName,
+              adapterRunName,
             };
           } else {
             yield {
@@ -229,6 +232,7 @@ export default class WyvernProvider
                 endBlock: toBlock,
               },
               providerName,
+              adapterRunName,
             };
           }
 
@@ -402,6 +406,7 @@ export default class WyvernProvider
       logIndex: event.logIndex,
       bundleSale: false,
       count: 1,
+      blockNumber: event.blockNumber,
     };
 
     if (!originalPrice) {
@@ -466,7 +471,7 @@ export default class WyvernProvider
             ...eventMetadata,
             seller: ethers.utils.hexStripZeros(seller),
             buyer: ethers.utils.hexStripZeros(buyer),
-            tokenID,
+            tokenID: BigNumber.from(tokenID).toString(),
             contractAddress: ERC721Transfer.contract,
             data: ERC721Transfer.decodedData,
           };
@@ -484,13 +489,15 @@ export default class WyvernProvider
           (l) => l.log.name === "TransferBatch"
         );
         if (ERC1155TransferSingle) {
-          const [, seller, buyer] = ERC1155TransferSingle.decodedData;
+          const [, seller, buyer, tokenID] = ERC1155TransferSingle.decodedData;
+          const { _id } = ERC1155TransferSingle.decodedData;
           eventMetadata = {
             ...eventMetadata,
             seller: ethers.utils.hexStripZeros(seller),
             buyer: ethers.utils.hexStripZeros(buyer),
-            tokenID: null,
+            tokenID: (tokenID ?? _id ?? "").toString(),
             data: ERC1155TransferSingle.decodedData,
+            contractAddress: ERC1155TransferSingle.contract,
           };
           LOGGER.debug(`ERC1155TransferSingle`, {
             ...eventMetadata,
@@ -498,13 +505,15 @@ export default class WyvernProvider
           });
           return eventMetadata;
         } else if (ERC1155TransferBatch) {
-          const [, seller, buyer] = ERC1155TransferBatch.decodedData;
+          const [, seller, buyer, tokenID] = ERC1155TransferBatch.decodedData;
+          const { _id } = ERC1155TransferBatch.decodedData;
           eventMetadata = {
             ...eventMetadata,
             seller: ethers.utils.hexStripZeros(seller),
             buyer: ethers.utils.hexStripZeros(buyer),
-            tokenID: null,
+            tokenID: (tokenID ?? _id ?? "").toString(),
             data: ERC1155TransferBatch.decodedData,
+            contractAddress: ERC1155TransferBatch.contract,
           };
           LOGGER.debug(`ERC1155TransferBatch`, {
             ...eventMetadata,
@@ -529,6 +538,7 @@ export default class WyvernProvider
       return eventMetadata;
     } catch (e) {
       LOGGER.error(`Retrieving event metadata failed`, {
+        error: e,
         eventMetadata,
         event,
         receipt,
@@ -553,9 +563,7 @@ export default class WyvernProvider
     const amount = restoreBigNumber(eventLog.log.args[4]);
 
     if (hasERC20) {
-      const log = ERC20Logs.reverse().find((l) =>
-        this.config.chains[chain].erc20Tokens.includes(l.contract)
-      );
+      const log = ERC20Logs.reverse().find((l) => amount.eq(l.decodedData[2]));
       if (log) {
         address = log.contract;
       }
@@ -657,5 +665,133 @@ export default class WyvernProvider
     }
 
     return relevantLogs;
+  }
+}
+
+export class LateWyvernProvider extends WyvernProvider {
+  public async *fetchSales(): AsyncGenerator<ChainEvents> {
+    console.log("fetch");
+    for (const chain of Object.keys(this.chains) as Blockchain[]) {
+      const { deployBlock, contractAddress, providerName, saleTopic } =
+        this.config.chains[chain];
+      let lateProviderCursor: Key = null;
+      let result = false;
+
+      do {
+        const { Items, LastEvaluatedKey } = await dynamodb.query({
+          KeyConditionExpression: `PK = :pk`,
+          ExpressionAttributeValues: {
+            ":pk": `suspectSale`,
+          },
+          ScanIndexForward: true,
+          ...(lateProviderCursor && { ExclusiveStartKey: lateProviderCursor }),
+        });
+        lateProviderCursor = LastEvaluatedKey;
+
+        const deleteSales: Array<{
+          PK: string;
+          SK: string;
+        }> = [];
+        const chainEvents: ChainEvents = {
+          blockRange: null,
+          chain,
+          events: [],
+          providerName,
+          blocks: {},
+          receipts: {},
+        };
+
+        for (const item of Items) {
+          const { SK, collection } = item;
+          const [, contractAddress, , marketplace] = collection.split(/#/);
+          const [timestamp, , txHash, logIndex] = SK.split(/#/);
+
+          if (marketplace !== Marketplace.Opensea) {
+            continue;
+          }
+
+          const { Items: sales } = await dynamodb.query({
+            KeyConditionExpression: `PK = :pk AND SK = :sk`,
+            ExpressionAttributeValues: {
+              ":pk": collection,
+              ":sk": SK,
+            },
+          });
+
+          const receipt = await this.chains[
+            item.chain as Blockchain
+          ].getTransactionReceipt(txHash);
+          const wyvernEvents = this.getWyvernEvents(
+            item.chain,
+            saleTopic,
+            receipt.logs
+          );
+
+          if (wyvernEvents.length > 1) {
+          }
+
+          for (const event of wyvernEvents) {
+            const metadata = this.getEventMetadata(event, receipt, item.chain);
+
+            LOGGER.info(`LateProvider metatadat`, { metadata, sales });
+          }
+
+          if (!logIndex) {
+            deleteSales.push({
+              PK: `sales#${contractAddress}#marketplace#${Marketplace.Opensea}`,
+              SK,
+            });
+          }
+        }
+
+        if (chainEvents.events.length) {
+          result = (yield chainEvents) as boolean;
+          if (result) {
+            for (const sale of deleteSales) {
+              // await dynamodb.delete({
+              //   Key: sale,
+              // });
+            }
+          }
+        }
+      } while (lateProviderCursor && result);
+    }
+  }
+
+  public getWyvernEvents(
+    chain: Blockchain,
+    saleTopic: string,
+    logs: Array<Log>
+  ) {
+    return logs
+      .filter((log) => {
+        return log.topics[0] === saleTopic;
+      })
+      .map((log) => {
+        return this.wrapWyvernLog(chain, saleTopic, log);
+      })
+      .filter(Boolean);
+  }
+
+  public wrapWyvernLog(chain: Blockchain, saleTopic: string, log: Log) {
+    const iface = this.interfaces[chain];
+    const fragment = iface.getEvent(saleTopic);
+    const event = <Event>Object.assign({}, log);
+
+    event.event = fragment.name;
+    try {
+      event.args = iface.decodeEventLog(fragment, log.data, log.topics);
+    } catch (e) {
+      LOGGER.error(`Failed to decode log`, {
+        log,
+        fragment,
+        saleTopic,
+        event,
+      });
+      return null;
+    }
+    event.eventSignature = fragment.format();
+
+    return event;
   }
 }

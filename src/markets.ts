@@ -4,6 +4,7 @@ import { Blockchain, Marketplace, HumanABI } from "./types";
 export type MarketChainConfig = {
   enabled: boolean;
   providerName: string;
+  adapterRunName?: string;
   contractAddress: string;
   abi: HumanABI;
   saleEventName?: string;

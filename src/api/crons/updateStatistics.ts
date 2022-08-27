@@ -4,6 +4,8 @@ import { Blockchain, Marketplace, RecordState, SaleData, UpdateCollectionStatist
 import { getLogger } from "../../utils/logger";
 import { CronConfig } from "./types";
 
+const DYNAMODB_MAX_SIZE = 4e5 - 4e5 * 0.01;
+
 const LOGGER = getLogger("CRON_UPDATE_STATISTICS", {
   datadog: !!process.env.DATADOG_API_KEY,
 });
@@ -33,7 +35,7 @@ type UpdateResult = {
 const NOW = Date.now();
 
 let runtime = 0;
-main.runtime = 60 * 60 * 1e3 * 4;
+main.runtime = 60 * 5 * 1e3;
 main.interval = setInterval(() => runtime++, 1e3);
 
 export default async function main(config: CronConfig) {
@@ -41,10 +43,14 @@ export default async function main(config: CronConfig) {
   let cursor: AWS.DynamoDB.DocumentClient.Key = null;
   let currentQuery = null;
   let closing = false;
+  let closeReason = null;
 
-  const close = () => (closing = true);
-  promise.then(() => close);
-  process.on("disconnect", close);
+  const close = (reason = "no reason") => {
+    closeReason = reason;
+    closing = true;
+  };
+  promise.then(() => () => close("runtime"));
+  process.on("disconnect", () => close("disconnect"));
 
   function updateSalesState(sales: Array<SaleRecord>): Promise<any> {
     const updates = [];
@@ -65,7 +71,9 @@ export default async function main(config: CronConfig) {
     return Promise.allSettled(updates);
   }
 
-  // eslint-disable-next-line no-unmodified-loop-condition, no-unreachable-loop
+  const results: Array<UpdateResult> = [];
+
+  // eslint-disable-next-line no-unmodified-loop-condition
   while (!closing) {
     LOGGER.debug(`Getting from cursor`, { cursor });
     try {
@@ -80,15 +88,24 @@ export default async function main(config: CronConfig) {
         },
         ...(cursor && { ExclusiveStartKey: cursor }),
       });
+
       LOGGER.debug(`Query result`, {
         len: currentQuery.Items.length,
         cursor,
       });
-      cursor = currentQuery.LastEvaluatedKey;
-      if (!cursor) closing = true;
 
-      if (!cursor && !currentQuery.Items.length) {
-        break;
+      cursor = currentQuery.LastEvaluatedKey;
+      if (!cursor || (!cursor && !currentQuery.Items.length)) {
+        close("empty cursor or no items");
+      }
+
+      if (closing) {
+        LOGGER.info(`Closing UpdateStatistics`, {
+          runtime,
+          cursor: cursor ?? "no cursor",
+          items: currentQuery.Items.length,
+          closeReason: closeReason ?? "no reason",
+        });
       }
 
       const updates: StatsRecords = {};
@@ -109,7 +126,6 @@ export default async function main(config: CronConfig) {
         updates[item.chain][item.marketplace].sales.push(item);
       }
 
-      const results: Array<UpdateResult> = [];
       for (const [chain, markets] of Object.entries(updates)) {
         for (const [market, stat] of Object.entries(markets)) {
           const stats: UpdateCollectionStatisticsResult =
@@ -131,21 +147,12 @@ export default async function main(config: CronConfig) {
           LOGGER.debug(`Update Statistics UpdateResult`, { result });
         }
       }
-
-      ddbClient.put({
-        PK: `cronResult`,
-        SK: `updateStatistics#${NOW}`,
-        status: 0,
-        runtime,
-        results,
-      });
-      LOGGER.debug(`Update Results`, { results });
     } catch (e) {
       LOGGER.error(`Update Statistics Error`, {
         error: e,
         SK: `updateStatistics#${NOW}`,
       });
-      ddbClient.put({
+      await ddbClient.put({
         PK: `cronResult`,
         SK: `updateStatistics#${NOW}`,
         status: 1,
@@ -154,6 +161,29 @@ export default async function main(config: CronConfig) {
       });
       return 1;
     }
+  }
+
+  for (
+    let i = 0, x = 0, batchSize = 100;
+    i < results.length;
+    i += batchSize, x++
+  ) {
+    let slice = results.slice(i, i + batchSize);
+    while (JSON.stringify(slice).length > DYNAMODB_MAX_SIZE && batchSize > 1) {
+      batchSize = Math.ceil(batchSize / 2);
+      slice = results.slice(i, i + batchSize);
+    }
+    try {
+      await ddbClient.put({
+        PK: `cronResult`,
+        SK: `updateStatistics#${NOW}#${x}`,
+        status: 0,
+        runtime,
+        slice,
+        batchSize,
+        range: [i, i + batchSize],
+      });
+    } catch (e) {}
   }
 
   return 0;

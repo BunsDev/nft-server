@@ -4,6 +4,10 @@ require('dotenv').config()
 
 export const ONE_HOUR = 1;
 
+export const ONE_WEEK_MILISECONDS = 7 * 86400 * 1000;
+export const ONE_DAY_MILISECONDS = 86400 * 1000;
+export const ONE_HOUR_MILISECONDS = 3600 * 1000;
+
 export const DEFAULT_TOKEN_ADDRESSES: Record<Blockchain, string> = {
   [Blockchain.Ethereum]: "0x0000000000000000000000000000000000000000",
   [Blockchain.Arbitrum]: "0x0000000000000000000000000000000000000000",

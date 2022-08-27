@@ -81,6 +81,7 @@ export default class SeaportProvider
   public market = Marketplace.Opensea;
 
   private shapeCount: Record<string, number> = {};
+  private shapeTx: Record<string, string> = {};
 
   public withWorker(worker: ClusterWorker): void {
     super.withWorker(worker);
@@ -99,7 +100,7 @@ export default class SeaportProvider
   public async *fetchSales(): AsyncGenerator<ChainEvents> {
     // eslint-disable-next-line no-unreachable-loop
     for (const chain of Object.keys(this.chains) as Blockchain[]) {
-      const { deployBlock, contractAddress, providerName } =
+      const { deployBlock, contractAddress, providerName, adapterRunName } =
         this.config.chains[chain];
       const currentBlock: number = await this.chains[
         chain
@@ -110,7 +111,7 @@ export default class SeaportProvider
         chain,
         true,
         deployBlock,
-        providerName
+        adapterRunName ?? providerName
       );
       if (deployBlock && Number.isInteger(deployBlock)) {
         if (lastSyncedBlockNumber < deployBlock) {
@@ -118,7 +119,7 @@ export default class SeaportProvider
             Marketplace.Opensea,
             deployBlock,
             chain,
-            providerName
+            adapterRunName ?? providerName
           );
         }
         lastSyncedBlockNumber = Math.max(deployBlock, lastSyncedBlockNumber);
@@ -264,12 +265,14 @@ export default class SeaportProvider
                         PK: "seaportShape",
                         SK: shape,
                       },
-                      UpdateExpression: `ADD #count :count`,
+                      UpdateExpression: `ADD #count :count SET #tx = :tx`,
                       ExpressionAttributeNames: {
                         "#count": "count",
+                        "#tx": "tx",
                       },
                       ExpressionAttributeValues: {
                         ":count": this.shapeCount[shape],
+                        ":tx": this.shapeTx[shape],
                       },
                     });
                     this.shapeCount[shape] = 0;
@@ -353,6 +356,7 @@ export default class SeaportProvider
         this.shapeCount[shape] = this.shapeCount[shape]
           ? this.shapeCount[shape] + 1
           : 1;
+        this.shapeTx[shape] = event.transactionHash;
       }
 
       const orderShape: OrderShape = this.getOrderShape(offer, consideration);
@@ -439,10 +443,10 @@ export default class SeaportProvider
               data: [],
               eventSignatures: [event.eventSignature],
               payment: {
-                address: null,
-                amount: BigNumber.from(0),
+                address: offer[0].token,
+                amount: BigNumber.from(offer[0].amount),
               },
-              price: BigNumber.from(0),
+              price: BigNumber.from(offer[0].amount),
               tokenID: null,
               count: 0,
               hash: event.transactionHash,
@@ -452,11 +456,6 @@ export default class SeaportProvider
           }
           c[v.token] = {
             ...c[v.token],
-            payment: {
-              address: offer[0].token,
-              amount: c[v.token].payment.amount.add(v.amount),
-            },
-            price: c[v.token].price.add(v.amount),
             count: c[v.token].count++,
             tokenID: v.identifier.toString(),
             data: [
@@ -537,7 +536,7 @@ export default class SeaportProvider
     recipient: string
   ): Array<EventMetadata> {
     // ERC721/1155+ : ERC20 , ERC721/1155+?
-    const price = this.getAmountTotal(consideration, ItemTypeNumeric.NATIVE);
+    const price = this.getAmountTotal(consideration, ItemTypeNumeric.ERC20);
     return Object.values(
       offer.reduce((c: TokenEventMetadataMap, v: any) => {
         if (!(v.token in c)) {

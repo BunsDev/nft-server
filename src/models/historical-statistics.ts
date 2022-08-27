@@ -1,7 +1,17 @@
 import { getLogger } from "../utils/logger";
 import { Collection } from ".";
-import { Blockchain, Marketplace, SaleData, UpdateCollectionStatisticsResult } from "../types";
-import { handleError } from "../utils";
+import {
+  Blockchain,
+  DailyVolumeRecord,
+  DateTruncate,
+  Marketplace,
+  SaleData,
+  SaleRecord,
+  StatType,
+  UpdateCollectionStatisticsResult,
+  VolumeRecord,
+} from "../types";
+import { fillMissingVolumeRecord, handleError, timestamp, truncateDate } from "../utils";
 import dynamodb from "../utils/dynamodb";
 
 const ONE_DAY_MILISECONDS = 86400 * 1000;
@@ -11,24 +21,41 @@ const LOGGER = getLogger("HISTORICAL_STATISTICS", {
 });
 
 export class HistoricalStatistics {
-  static async getGlobalStatistics(sortAsc: boolean = true) {
+  static async getGlobalStatistics(
+    sortAsc = true,
+    statType = StatType.DAILY_GLOBAL
+  ) {
     return dynamodb
       .query({
-        KeyConditionExpression: "PK = :pk",
+        IndexName: "collectionStats",
+        KeyConditionExpression: "statType = :stat",
         ExpressionAttributeValues: {
-          ":pk": "globalStatistics",
+          ":stat": statType,
         },
         ScanIndexForward: sortAsc,
       })
       .then((result) => result.Items);
   }
 
-  static async getCollectionStatistics(slug: string, sortAsc: boolean = true) {
+  static async getCollectionStatistics(
+    slug: string,
+    sortAsc = true,
+    statType = StatType.DAILY_COLLECTION
+  ) {
+    let prefix = "dailyStatistics";
+    switch (statType) {
+      case StatType.HOURLY_COLLECTION:
+        prefix = "hourlyStatistics";
+        break;
+      case StatType.WEEKLY_COLLECTION:
+        prefix = "weeklyStatistics";
+        break;
+    }
     return dynamodb
       .query({
         KeyConditionExpression: "PK = :pk",
         ExpressionAttributeValues: {
-          ":pk": `statistics#${slug}`,
+          ":pk": `${prefix}#${slug}`,
         },
         ScanIndexForward: sortAsc,
       })
@@ -279,20 +306,54 @@ export class HistoricalStatistics {
     return result;
   }
 
-  static async getDailyVolumesFromSales({ sales }: { sales: SaleData[] }) {
-    const volumes: any = {};
+  static async getDailyVolumesFromSales({
+    sales,
+    volumes,
+    fillMissingDates = false,
+  }: {
+    sales: (SaleRecord | SaleData)[];
+    volumes?: DailyVolumeRecord;
+    fillMissingDates?: boolean;
+  }) {
+    return HistoricalStatistics.getVolumesFromSales({
+      sales,
+      volumes,
+      fillMissingDates,
+      truncateDateTo: DateTruncate.DAY,
+    });
+  }
+
+  static getVolumesFromSales({
+    sales,
+    volumes,
+    fillMissingDates = false,
+    truncateDateTo = DateTruncate.DAY,
+  }: {
+    sales: (SaleRecord | SaleData)[];
+    volumes?: DailyVolumeRecord;
+    fillMissingDates?: boolean;
+    truncateDateTo?: DateTruncate;
+  }) {
+    volumes = volumes ?? {};
 
     for (const sale of sales) {
       // Do not count if sale price is 0 or does not have a USD or base equivalent
       if (sale.price <= 0 || sale.priceBase <= 0 || sale.priceUSD <= 0) {
         continue;
       }
+      if ("SK" in sale) {
+        sale.timestamp ??= sale.SK.split(/#/)[0];
+      }
       const timestamp = parseInt(sale.timestamp);
-      const startOfDay = timestamp - (timestamp % ONE_DAY_MILISECONDS);
-      volumes[startOfDay] = {
-        volume: (volumes[startOfDay]?.volume || 0) + sale.priceBase,
-        volumeUSD: (volumes[startOfDay]?.volumeUSD || 0) + sale.priceUSD,
+      const truncated = truncateDate(timestamp, truncateDateTo);
+      volumes[truncated] = {
+        volume: (volumes[truncated]?.volume || 0) + sale.priceBase,
+        volumeUSD: (volumes[truncated]?.volumeUSD || 0) + sale.priceUSD,
       };
+    }
+
+    if (fillMissingDates) {
+      volumes = fillMissingVolumeRecord(volumes, [], truncateDateTo);
     }
 
     return volumes;
@@ -328,13 +389,18 @@ export class HistoricalStatistics {
     chain,
     marketplace,
     slug,
+    statType,
   }: {
     chain?: string;
     marketplace?: string;
     slug?: string;
+    statType?: string;
   }) {
     if (chain) {
-      const globalStatistics = await HistoricalStatistics.getGlobalStatistics();
+      const globalStatistics = await HistoricalStatistics.getGlobalStatistics(
+        true,
+        statType as StatType
+      );
       return globalStatistics
         .map((statistic) => ({
           timestamp: Math.floor(statistic.SK / 1000),
@@ -345,7 +411,10 @@ export class HistoricalStatistics {
     }
 
     if (marketplace) {
-      const globalStatistics = await HistoricalStatistics.getGlobalStatistics();
+      const globalStatistics = await HistoricalStatistics.getGlobalStatistics(
+        true,
+        statType as StatType
+      );
       return globalStatistics
         .map((statistic) => ({
           timestamp: Math.floor(statistic.SK / 1000),
@@ -357,7 +426,9 @@ export class HistoricalStatistics {
 
     if (slug) {
       const statistics = await HistoricalStatistics.getCollectionStatistics(
-        slug
+        slug,
+        true,
+        statType as StatType
       );
       // Sums the volumes and USD volumes from every chain for that collection for every timestamp
       return statistics
@@ -387,7 +458,10 @@ export class HistoricalStatistics {
         .filter((statistic) => statistic.volume && statistic.volumeUSD);
     }
 
-    const globalStatistics = await HistoricalStatistics.getGlobalStatistics();
+    const globalStatistics = await HistoricalStatistics.getGlobalStatistics(
+      true,
+      statType as StatType
+    );
     return globalStatistics.map((statistic) => ({
       timestamp: Math.floor(statistic.SK / 1000),
       volume: Object.entries(statistic).reduce((volume, entry) => {

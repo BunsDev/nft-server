@@ -307,7 +307,10 @@ export function mergeDailyVolumeRecords(
   return volumes;
 }
 
-export function truncateDate(timestamp: number, truncate = DateTruncate.DAY) {
+export function truncateDate(
+  timestamp: number,
+  truncate: DateTruncate | number = DateTruncate.DAY
+) {
   switch (truncate) {
     case DateTruncate.HOUR:
     case DateTruncate.DAY:
@@ -317,6 +320,34 @@ export function truncateDate(timestamp: number, truncate = DateTruncate.DAY) {
       // eslint-disable-next-line no-case-declarations
       const day = new Date(timestamp).getUTCDay();
       return timestamp - day * DateTruncate.DAY;
+    default:
+      if (
+        !Object.values(DateTruncate).some(
+          (v: DateTruncate) => truncate % v === 0
+        )
+      ) {
+        throw new Error(
+          "Truncate should be a multiple of at least one DateTruncate"
+        );
+      }
+      switch (0) {
+        case truncate % DateTruncate.WEEK:
+          timestamp = truncateDate(timestamp, DateTruncate.WEEK);
+          return (
+            timestamp -
+            DateTruncate.DAY * 7 * (truncate / DateTruncate.WEEK - 1)
+          );
+        case truncate % DateTruncate.DAY:
+          timestamp = truncateDate(timestamp, DateTruncate.DAY);
+          return (
+            timestamp - DateTruncate.DAY * (truncate / DateTruncate.DAY - 1)
+          );
+        case truncate % DateTruncate.HOUR:
+          timestamp = truncateDate(timestamp, DateTruncate.HOUR);
+          return (
+            timestamp - DateTruncate.HOUR * (truncate / DateTruncate.HOUR - 1)
+          );
+      }
   }
 }
 

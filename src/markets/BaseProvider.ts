@@ -107,7 +107,7 @@ export default abstract class BaseProvider {
       clearInterval(this.__metricsInterval);
     }
     this.metrics = new Map();
-    this.__metricsInterval = setInterval(() => this.reportMetrics(), 1e4);
+    this.__metricsInterval = setInterval(() => this.reportMetrics(), 1e3);
   }
 
   private reportMetrics() {
@@ -168,7 +168,7 @@ export default abstract class BaseProvider {
   public async *fetchSales(): AsyncGenerator<ChainEvents> {
     // eslint-disable-next-line no-unreachable-loop
     for (const chain of Object.keys(this.chains) as Blockchain[]) {
-      const { deployBlock, contractAddress, providerName } =
+      const { deployBlock, contractAddress, providerName, adapterRunName } =
         this.config.chains[chain];
       const currentBlock: number = await this.chains[
         chain
@@ -179,7 +179,7 @@ export default abstract class BaseProvider {
         chain,
         true,
         deployBlock,
-        providerName
+        adapterRunName ?? providerName
       );
       if (deployBlock && Number.isInteger(deployBlock)) {
         if (lastSyncedBlockNumber < deployBlock) {
@@ -187,7 +187,7 @@ export default abstract class BaseProvider {
             this.market,
             deployBlock,
             chain,
-            providerName
+            adapterRunName ?? providerName
           );
         }
         lastSyncedBlockNumber = Math.max(deployBlock, lastSyncedBlockNumber);
@@ -307,6 +307,7 @@ export default abstract class BaseProvider {
               },
               receipts,
               providerName,
+              adapterRunName,
             };
           } else {
             yield {
@@ -317,6 +318,7 @@ export default abstract class BaseProvider {
                 endBlock: toBlock,
               },
               providerName,
+              adapterRunName,
             };
           }
 

@@ -8,7 +8,7 @@ import {
 } from "../constants";
 import { Blockchain, SaleData } from "../types";
 import { handleError, getPriceAtDate, roundUSD } from "../utils";
-import { LlamaFi, CoinResponse, PRICE_CACHE } from "./llamafi";
+import { LlamaFi, CoinResponse, PRICE_CACHE, ContractPrices } from "./llamafi";
 
 const LOGGER = getLogger("CURRENCY_CONVERTER", {
   datadog: !!process.env.DATADOG_API_KEY,
@@ -246,6 +246,7 @@ export class CurrencyConverter {
     for (const chain of Object.keys(uniqueAddressesTimestamps.addresses)) {
       for (const address of uniqueAddressesTimestamps.addresses[chain]) {
         let error = false;
+        let errCount = 0;
         do {
           error = false;
           try {
@@ -263,6 +264,24 @@ export class CurrencyConverter {
             prices[chain][address] = saleTokenPrices;
           } catch (e) {
             error = true;
+            errCount++;
+            if (errCount > 2) {
+              error = false;
+              prices[chain][address] = Object.values(timestampMap).reduce(
+                (c, t) => {
+                  c[t] = 0;
+                  return c;
+                },
+                {} as ContractPrices
+              );
+              LOGGER.alert(`Zeroed getHistoricPricesByContract()`, {
+                e,
+                address,
+                sale: sales.find((s) => s.paymentTokenAddress === address),
+                chain,
+                prices: Object.entries(prices[chain][address]).slice(0, 10),
+              });
+            }
             LOGGER.error(`LlamaFi error`, {
               e,
               address,
@@ -294,6 +313,8 @@ export class CurrencyConverter {
       } else {
         if (!(sale.paymentTokenAddress in prices[sale.chain])) {
           LOGGER.warn(`LlamaFi Unsupported Token`, { sale });
+          sale.priceBase = 0;
+          sale.priceUSD = 0;
           continue;
         }
         sale.priceUSD =
@@ -305,14 +326,9 @@ export class CurrencyConverter {
             timestampMap[t],
             sale.chain
           );
-        sale.price = sale.priceUSD / chainBasePriceAtTimestamp[timestampMap[t]];
-        sale.priceBase = sale.price;
+        sale.priceBase =
+          sale.priceUSD / chainBasePriceAtTimestamp[timestampMap[t]];
       }
-
-      LOGGER.debug(`Convert sale price`, {
-        price: sale.price,
-        USD: sale.priceUSD,
-      });
     }
   }
 }

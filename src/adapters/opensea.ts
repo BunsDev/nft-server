@@ -179,8 +179,8 @@ async function runSales(provider: AdapterProvider): Promise<void> {
 async function run(provider: AdapterProvider): Promise<void> {
   try {
     while (true) {
-      await Promise.all([/* runCollections(), */ runSales(provider)]);
-      await sleep(60 * 60);
+      await runSales(provider);
+      await sleep(parseInt(process.env.ADAPTER_SLEEP_PERIOD) || 3.6e3);
     }
   } catch (e) {
     await handleError(e, "opensea-adapter");

@@ -49,6 +49,7 @@ export default class LooksRareProvider
     events: Array<Event>,
     chain: Blockchain
   ): Array<EventMetadata> {
+    const { providerName } = this.config.chains[chain];
     const meta: Array<EventMetadata> = [];
     for (const event of events) {
       const parsed = this.parseLog(event, chain);
@@ -91,8 +92,10 @@ export default class LooksRareProvider
           event,
         },
         hash: event.transactionHash,
-        contract: Marketplace.LooksRare as string,
+        contract: providerName,
         logIndex: event.logIndex,
+        blockNumber: event.blockNumber,
+        bundleSale: false,
       });
     }
     return meta;

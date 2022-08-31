@@ -292,6 +292,7 @@ export default class SeaportProvider
               },
               receipts,
               providerName,
+              adapterRunName,
             };
           } else {
             yield {
@@ -302,6 +303,7 @@ export default class SeaportProvider
                 endBlock: toBlock,
               },
               providerName,
+              adapterRunName,
             };
           }
 

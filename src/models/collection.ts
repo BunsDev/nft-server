@@ -361,7 +361,7 @@ export class Collection {
       ":updatedAt": currentTime,
       ":chains": existingChains,
       ":marketplaces": existingMarketplaces,
-      ":category": `overview`,
+      ":category": `collections`,
     };
 
     // Update items

@@ -10,6 +10,7 @@ import zeroCollectionStats from "./zeroCollectionStats";
 import createAllCollections from "./createAllCollections";
 import globalStatistics from "./globalStatistics";
 import lateProvider from "./lateProvider";
+import collectionStatistics from "./collectionStatistics";
 
 export default {
   collectionDiscovery,
@@ -24,4 +25,5 @@ export default {
   zeroCollectionStats,
   createAllCollections,
   lateProvider,
+  collectionStatistics,
 };

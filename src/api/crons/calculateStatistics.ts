@@ -89,7 +89,7 @@ function spawnClusterFork(
   childSetup(fork);
 }
 
-if (cluster.isWorker) {
+if (cluster.isWorker && process.env.RUN_CRON_NAME === "calculateStatistics") {
   main();
 }
 
@@ -104,12 +104,14 @@ export default async function main() {
   let err = null;
 
   if (!SALE_START_TIME) {
+    const startOfDate = truncateDate(Date.now(), DATE_TRUNCATE * 4);
     const { Items } = await dynamodb.query({
       ScanIndexForward: false,
       IndexName: "collectionStats",
-      KeyConditionExpression: "statType = :st",
+      KeyConditionExpression: "statType = :st AND SK < :startOfDate",
       ExpressionAttributeValues: {
         ":st": STAT_TYPE,
+        ":startOfDate": startOfDate.toString(),
       },
       ProjectionExpression: "SK",
       Limit: 1,

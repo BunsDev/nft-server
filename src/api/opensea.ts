@@ -108,7 +108,7 @@ export class Opensea {
     const url = `https://api.opensea.io/api/v1/asset_contract/${address}`;
     if (REQS_PER_SEC >= 2) {
       LOGGER.alert(`OS Rate Limit Hit`, { REQS_PER_SEC });
-      await sleep(2e3);
+      await sleep(10);
     }
     REQS_PER_SEC++;
     const response = await axios.get(url, {

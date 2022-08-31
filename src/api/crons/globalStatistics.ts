@@ -67,12 +67,14 @@ export default async function main(config: CronConfig) {
   let err: string;
 
   if (!STAT_TIME_START) {
+    const startOfDate = truncateDate(Date.now(), DATE_STEP * 4);
     const { Items } = await dynamodb.query({
       ScanIndexForward: false,
       IndexName: "collectionStats",
-      KeyConditionExpression: "statType = :st",
+      KeyConditionExpression: "statType = :st AND SK < :startOfDate",
       ExpressionAttributeValues: {
         ":st": STAT_TYPE,
+        ":startOfDate": startOfDate.toString(),
       },
       ProjectionExpression: "SK",
       Limit: 1,

@@ -120,9 +120,29 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
       ],
     },
   },
+  [Marketplace.Blur]: {
+    chains: {
+      [Blockchain.Ethereum]: [
+        {
+          enabled: true,
+          cluster: false,
+          providerName: "blur",
+          deployBlock: 15779232,
+          contractAddress: "0x000000000000Ad05Ccc4F10045630fb830B95127",
+          saleEventName: "OrdersMatched",
+          saleTopic:
+            "0x61cbb2a3dee0b6064c2e681aadd61677fb4ef319f0b547508d495626f5a62f64",
+          deploymentEventName: "OwnershipTransferred",
+          abi: `[{"anonymous": false,"inputs":[{"indexed": true,"internalType": "address","name": "maker","type": "address"},{"indexed": true,"internalType": "address","name": "taker","type": "address"},{"components":[{"internalType": "address","name": "trader","type": "address"},{"internalType": "enum Side","name": "side","type": "uint8"},{"internalType": "address","name": "matchingPolicy","type": "address"},{"internalType": "address","name": "collection","type": "address"},{"internalType": "uint256","name": "tokenId","type": "uint256"},{"internalType": "uint256","name": "amount","type": "uint256"},{"internalType": "address","name": "paymentToken","type": "address"},{"internalType": "uint256","name": "price","type": "uint256"},{"internalType": "uint256","name": "listingTime","type": "uint256"},{"internalType": "uint256","name": "expirationTime","type": "uint256"},{"components":[{"internalType": "uint16","name": "rate","type": "uint16"},{"internalType": "address payable","name": "recipient","type": "address"}],"internalType": "struct Fee[]","name": "fees","type": "tuple[]"},{"internalType": "uint256","name": "salt","type": "uint256"},{"internalType": "bytes","name": "extraParams","type": "bytes"}],"indexed": false,"internalType": "struct Order","name": "sell","type": "tuple"},{"indexed": false,"internalType": "bytes32","name": "sellHash","type": "bytes32"},{"components":[{"internalType": "address","name": "trader","type": "address"},{"internalType": "enum Side","name": "side","type": "uint8"},{"internalType": "address","name": "matchingPolicy","type": "address"},{"internalType": "address","name": "collection","type": "address"},{"internalType": "uint256","name": "tokenId","type": "uint256"},{"internalType": "uint256","name": "amount","type": "uint256"},{"internalType": "address","name": "paymentToken","type": "address"},{"internalType": "uint256","name": "price","type": "uint256"},{"internalType": "uint256","name": "listingTime","type": "uint256"},{"internalType": "uint256","name": "expirationTime","type": "uint256"},{"components":[{"internalType": "uint16","name": "rate","type": "uint16"},{"internalType": "address payable","name": "recipient","type": "address"}],"internalType": "struct Fee[]","name": "fees","type": "tuple[]"},{"internalType": "uint256","name": "salt","type": "uint256"},{"internalType": "bytes","name": "extraParams","type": "bytes"}],"indexed": false,"internalType": "struct Order","name": "buy","type": "tuple"},{"indexed": false,"internalType": "bytes32","name": "buyHash","type": "bytes32"}],"name": "OrdersMatched","type": "event"}]`,
+          erc20Tokens: [],
+        },
+      ],
+    },
+  },
 };
 
 export const OpenSea = markets[Marketplace.Opensea];
 export const LooksRare = markets[Marketplace.LooksRare];
+export const Blur = markets[Marketplace.Blur];
 
 export default markets;

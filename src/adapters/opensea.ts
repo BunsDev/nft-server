@@ -1,150 +1,186 @@
-import axios from "axios";
 import { DataAdapter } from ".";
-import { Collection, Contract, Sale, HistoricalStatistics } from "../models";
-import { Opensea } from "../api/opensea";
-import { Coingecko } from "../api/coingecko";
+import { Collection, Sale, AdapterState } from "../models";
 import { CurrencyConverter } from "../api/currency-converter";
-import { COINGECKO_IDS } from "../constants";
-import { sleep, handleError, filterObject } from "../utils";
-import { Blockchain, CollectionData, LowVolumeError, Marketplace } from "../types";
+import { sleep, handleError, restoreBigNumber, awaitSequence } from "../utils";
+import { Marketplace, SaleData } from "../types";
+import {
+  MarketChainConfig,
+  MarketConfig,
+  OpenSea as OpenSeaMarketConfig,
+} from "../markets";
+import { OpenSeaProvider } from "../markets/OpenSeaProvider";
+import { ethers } from "ethers";
+import { ChainEvents } from "../markets/BaseMarketOnChainProvider";
+import { getLogger, configureLoggerDefaults } from "../utils/logger";
+import {
+  ClusterManager,
+  ClusterWorker,
+  IClusterProvider,
+  isPrimary
+} from "../utils/cluster";
+import cluster from "cluster";
+import { IMarketOnChainProvider } from "../interfaces";
+import { fork } from "child_process";
+import dynamodb from "../utils/dynamodb";
 
-async function runCollections(): Promise<void> {
-  const collections = await Contract.getAll(Blockchain.Ethereum);
+type AdapterProvider = IMarketOnChainProvider & IClusterProvider;
+type AdapterProviderConfig = {
+  providerConfig: MarketConfig;
+  chainConfig: MarketChainConfig;
+};
 
-  if (collections.length === 0) {
-    console.log("No OpenSea collections to request...");
-    return;
-  }
+configureLoggerDefaults({
+  error: false,
+  info: false,
+  debug: false,
+});
 
-  const { usd: ethInUSD } = await Coingecko.getPricesById(
-    COINGECKO_IDS[Blockchain.Ethereum].geckoId
-  );
+const LOGGER = getLogger("OPENSEA_ADAPTER", {
+  datadog: !!process.env.DATADOG_API_KEY,
+});
 
-  console.log("Fetching metadata for Opensea collections:", collections.length);
-
-  for (const collection of collections) {
-    try {
-      console.log(
-        "Fetching metadata for Opensea collection:",
-        collection?.name || "No name"
-      );
-      await fetchCollection(
-        collection.slug,
-        collection.address,
-        collection.defaultTokenId,
-        ethInUSD
-      );
-    } catch (e) {
-      if (e instanceof LowVolumeError) {
-        await Contract.remove(Blockchain.Ethereum, collection.address);
-      }
-      await handleError(e, "opensea-adapter:runCollections");
-    }
-  }
-}
-
-async function runSales(): Promise<void> {
+async function runSales(provider: AdapterProvider): Promise<void> {
   const { data: collections } = await Collection.getSorted({
     marketplace: Marketplace.Opensea,
+    returnAll: true,
   });
 
-  console.log("Fetching sales for OpenSea collections:", collections.length);
-  for (const collection of collections) {
-    console.log("Fetching sales for OpenSea collection:", collection.name);
-    await fetchSales(collection);
-  }
-}
+  // const collections = [];
+  // const collectionMap: Record<string, any> = {};
 
-async function fetchCollection(
-  slug: string,
-  address: string,
-  tokenId: string,
-  ethInUSD: number
-) {
-  let fetchedSlug = "";
-  if (!slug) {
-    fetchedSlug = (await Opensea.getContract(address, tokenId)).slug;
-  }
-  const { metadata, statistics } = await Opensea.getCollection(
-    address,
-    slug || fetchedSlug,
-    ethInUSD
-  );
-  const filteredMetadata = filterObject(metadata) as CollectionData;
+  const collectionMap: Record<string, any> = collections.reduce((m, c) => {
+    m[c.address] = c;
+    return m;
+  }, {});
 
-  await Collection.upsert({
-    slug: slug || fetchedSlug,
-    metadata: filteredMetadata,
-    statistics,
-    chain: Blockchain.Ethereum,
-    marketplace: Marketplace.Opensea,
-  });
-}
+  LOGGER.info("Fetching sales for OpenSea collections:", collections.length);
 
-async function fetchSales(collection: Collection): Promise<void> {
-  let offset = 0;
-  const limit = 300;
-  const slug = collection.slug;
-  const lastSaleTime = await Sale.getLastSaleTime({
-    slug,
-    marketplace: Marketplace.Opensea,
-  });
+  const itSales = provider.fetchSales();
+  // eslint-disable-next-line prefer-const
+  let nextSales = itSales.next();
+  // eslint-disable-next-line no-unreachable-loop
+  while (!(await nextSales).done) {
+    const {
+      chain,
+      events,
+      blockRange,
+      receipts,
+      blocks: blockMap,
+      providerName,
+      adapterRunName,
+    } = (await nextSales).value as ChainEvents;
+    LOGGER.info(`Got ${events.length} sales`);
 
-  while (offset <= 10000) {
-    try {
-      const sales = await Opensea.getSales(
-        collection.address,
-        lastSaleTime,
-        offset,
-        limit
-      );
-      const filteredSales = sales.filter((sale) => sale);
-
-      if (filteredSales.length === 0) {
-        sleep(3);
-        return;
-      }
-
-      const convertedSales = await CurrencyConverter.convertSales(
-        filteredSales
-      );
-
-      const salesInserted = await Sale.insert({
-        slug,
-        marketplace: Marketplace.Opensea,
-        sales: convertedSales,
-      });
-
-      if (salesInserted) {
-        await HistoricalStatistics.updateStatistics({
-          slug,
-          chain: Blockchain.Ethereum,
-          marketplace: Marketplace.Opensea,
-          sales: convertedSales,
-        });
-      }
-      offset += limit;
-      await sleep(1);
-    } catch (e) {
-      if (axios.isAxiosError(e)) {
-        if (e.response.status === 500) {
-          console.error(
-            "Error [opensea-adapter:fetchSales]: offset not valid or server error"
-          );
-          break;
-        }
-      }
-      await handleError(e, "opensea-adapter:fetchSales");
+    if (!events.length) {
+      blockRange?.endBlock &&
+        AdapterState.updateSalesLastSyncedBlockNumber(
+          Marketplace.Opensea,
+          blockRange.endBlock,
+          chain,
+          adapterRunName ?? providerName
+        );
+      nextSales = itSales.next();
       continue;
     }
+
+    const sales: Array<SaleData> = [];
+
+    for (const [hash, receiptWithMeta] of Object.entries(receipts)) {
+      const { meta: metas, receipt } = receiptWithMeta;
+      if (!metas.length) {
+        LOGGER.warn(`Skipping TX empty metadata`, { receipt, metas });
+        continue;
+      }
+      for (const meta of metas) {
+        if (!meta) {
+          LOGGER.warn(`Skipping meta`, { tx: receipt.transactionHash });
+          continue;
+        }
+        const { contractAddress, price, eventSignatures, data, payment } = meta;
+        const formattedPrice = ethers.utils.formatUnits(
+          restoreBigNumber(payment.amount),
+          "ether"
+        );
+        if (!contractAddress) {
+          LOGGER.debug(`Missing contract address. Skipping sale.`, {
+            hash,
+            metas,
+          });
+          continue;
+        }
+        sales.push({
+          txnHash: receipt.transactionHash,
+          timestamp: (
+            blockMap[receipt.blockNumber].timestamp * 1000
+          ).toString(),
+          paymentTokenAddress: payment.address,
+          contractAddress,
+          price: parseFloat(formattedPrice),
+          priceBase: null,
+          priceUSD: null,
+          sellerAddress: meta.seller,
+          buyerAddress: meta.buyer,
+          marketplace: Marketplace.Opensea,
+          chain,
+          metadata: { payment, data },
+          count: meta.count,
+          contract: meta.contract,
+          logIndex: meta.logIndex,
+          bundleSale: meta.bundleSale,
+          hasCollection: !!collectionMap[contractAddress],
+          tokenID: (meta.tokenID ?? "").toString(),
+          blockNumber: meta.blockNumber,
+        });
+      }
+    }
+
+    try {
+      await awaitSequence(
+        () => CurrencyConverter.matchSalesWithPrices(sales),
+        () =>
+          Sale.insert({
+            slug: collectionMap,
+            marketplace: Marketplace.Opensea,
+            sales,
+          })
+      );
+    } catch (e) {
+      const hashes = sales.reduce((hashes, sale) => {
+        if (!(sale.paymentTokenAddress in hashes)) {
+          hashes[sale.paymentTokenAddress] = [];
+        }
+        hashes[sale.paymentTokenAddress].push(sale.txnHash);
+        return hashes;
+      }, {} as Record<string, Array<string>>);
+      LOGGER.error(`Sale error`, {
+        error: e,
+        sales,
+        hashes,
+        emptySales: !sales.length ? "true" : "false",
+      });
+      dynamodb.put({
+        PK: "failedSales",
+        SK: `${providerName}#${Date.now()}`,
+        blockRange,
+      });
+    }
+
+    blockRange?.endBlock &&
+      AdapterState.updateSalesLastSyncedBlockNumber(
+        Marketplace.Opensea,
+        blockRange.endBlock,
+        chain,
+        adapterRunName ?? providerName
+      );
+    nextSales = itSales.next();
   }
 }
 
-async function run(): Promise<void> {
+async function run(provider: AdapterProvider): Promise<void> {
   try {
     while (true) {
-      await Promise.all([runCollections(), runSales()]);
-      await sleep(60 * 60);
+      await runSales(provider);
+      await sleep(parseInt(process.env.ADAPTER_SLEEP_PERIOD) || 3.6e3);
     }
   } catch (e) {
     await handleError(e, "opensea-adapter");
@@ -153,6 +189,39 @@ async function run(): Promise<void> {
 
 const OpenseaAdapter: DataAdapter = { run };
 
-OpenseaAdapter.run();
+function spawnProviderChild(p: AdapterProviderConfig, run = 0) {
+  LOGGER.info(`Spawn Provider Child`, { provider: p, run });
+  const providerChild = fork(__filename, [
+    "provider-child",
+    p.chainConfig.providerName,
+  ]);
+  providerChild.on("exit", (code) => {
+    LOGGER.alert(`Provider Child Exit`, { provider: p, code, run });
+    if (run < 3) {
+      spawnProviderChild(p, run + 1);
+    }
+  });
+}
+
+if (!process.argv[2] && !process.env.RUN_CRON_NAME) {
+  OpenSeaProvider.build(OpenSeaMarketConfig).forEach((p) =>
+    spawnProviderChild(p)
+  );
+} else if (process.argv[2] === "provider-child") {
+  const OSProviders = OpenSeaProvider.build(OpenSeaMarketConfig);
+  const providerName = process.argv[3];
+  const config = OSProviders.find(
+    (p) => p.chainConfig.providerName === providerName
+  );
+  const provider = config.instantiate();
+  if (cluster.isWorker && config.chainConfig.cluster) {
+    ClusterWorker.create(process.env.WORKER_UUID, `OPENSEA`, provider);
+  } else if (isPrimary()) {
+    if (config.chainConfig.cluster) {
+      ClusterManager.create(`OPENSEA`, provider);
+    }
+    OpenseaAdapter.run(provider);
+  }
+}
 
 export default OpenseaAdapter;

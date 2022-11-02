@@ -4,7 +4,7 @@ import axios from "axios";
 import { URLSearchParams } from "url";
 
 import { DEFAULT_TOKEN_ADDRESSES } from "../constants";
-import { roundUSD, convertByDecimals } from "../utils";
+import { roundUSD, convertByDecimals, sleep } from "../utils";
 import {
   Blockchain,
   CollectionAndStatisticData,
@@ -14,10 +14,18 @@ import {
   Marketplace,
 } from "../types";
 import { HistoricalStatistics } from "../models";
+import { getLogger } from "../utils/logger";
 
 const OPENSEA_API_KEY = process.env.OPENSEA_API_KEY;
 const SECONDARY_OPENSEA_API_KEY = process.env.SECONDARY_OPENSEA_API_KEY;
 const VOLUME_THRESHOLD = 0.1; //ETH
+
+const LOGGER = getLogger("OPENSEA_API", {
+  datadog: !!process.env.DATADOG_API_KEY,
+});
+
+let REQS_PER_SEC = 0;
+setInterval(() => (REQS_PER_SEC = 0), 1e3);
 
 export class Opensea {
   public static async getCollection(
@@ -96,11 +104,13 @@ export class Opensea {
     };
   }
 
-  public static async getContract(
-    address: string,
-    tokenId: string
-  ): Promise<CollectionData> {
-    const url = `https://api.opensea.io/api/v1/asset/${address}/${tokenId}/`;
+  public static async getContract(address: string): Promise<CollectionData> {
+    const url = `https://api.opensea.io/api/v1/asset_contract/${address}`;
+    if (REQS_PER_SEC >= 2) {
+      LOGGER.alert(`OS Rate Limit Hit`, { REQS_PER_SEC });
+      await sleep(10);
+    }
+    REQS_PER_SEC++;
     const response = await axios.get(url, {
       headers: { "X-API-KEY": OPENSEA_API_KEY },
     });

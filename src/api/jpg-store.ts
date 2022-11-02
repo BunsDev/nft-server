@@ -216,6 +216,9 @@ export class JpgStore {
         sellerAddress: seller_address || "",
         chain: Blockchain.Cardano,
         marketplace: Marketplace.JpgStore,
+        contract: Marketplace.JpgStore as string,
+        logIndex: sale.id,
+        metadata: { sale },
       };
     });
   }

@@ -1,8 +1,12 @@
-import { Blockchain, Marketplace, MoralisChain } from "./types";
+import { Blockchain, HumanABI, Marketplace, MoralisChain } from "./types";
 
 require('dotenv').config()
 
 export const ONE_HOUR = 1;
+
+export const ONE_WEEK_MILISECONDS = 7 * 86400 * 1000;
+export const ONE_DAY_MILISECONDS = 86400 * 1000;
+export const ONE_HOUR_MILISECONDS = 3600 * 1000;
 
 export const DEFAULT_TOKEN_ADDRESSES: Record<Blockchain, string> = {
   [Blockchain.Ethereum]: "0x0000000000000000000000000000000000000000",
@@ -15,6 +19,10 @@ export const DEFAULT_TOKEN_ADDRESSES: Record<Blockchain, string> = {
   [Blockchain.Avalanche]: "avax:0x0000000000000000000000000000000000000000",
   [Blockchain.Fantom]: "ftm:0x0000000000000000000000000000000000000000",
   [Blockchain.Harmony]: "one:0x0000000000000000000000000000000000000000",
+};
+
+export const WRAPPED_BASE_TOKENS: Partial<Record<Blockchain, string>> = {
+  [Blockchain.Ethereum]: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
 };
 
 export const MORALIS_CHAINS: Record<Blockchain, MoralisChain> = {
@@ -40,6 +48,7 @@ export const MARKETPLACE_CHAINS: Record<Marketplace, Blockchain[]> = {
   [Marketplace.DefiKingdoms]: [Blockchain.Harmony],
   [Marketplace.NFTrade]: [Blockchain.Avalanche],
   [Marketplace.Opensea]: [Blockchain.Ethereum],
+  [Marketplace.LooksRare]: [Blockchain.Ethereum],
   [Marketplace.PancakeSwap]: [Blockchain.BSC],
   [Marketplace.NFTKEY]: [
     Blockchain.Fantom,
@@ -59,7 +68,11 @@ export const CHAIN_MARKETPLACES: Record<Blockchain, Marketplace[]> = {
   [Blockchain.Fantom]: [Marketplace.PaintSwap, Marketplace.NFTKEY],
   [Blockchain.Harmony]: [Marketplace.DefiKingdoms, Marketplace.NFTKEY],
   [Blockchain.Avalanche]: [Marketplace.NFTrade, Marketplace.NFTKEY],
-  [Blockchain.Ethereum]: [Marketplace.Opensea, Marketplace.NFTKEY],
+  [Blockchain.Ethereum]: [
+    Marketplace.Opensea,
+    Marketplace.NFTKEY,
+    Marketplace.LooksRare,
+  ],
   [Blockchain.BSC]: [Marketplace.PancakeSwap, Marketplace.NFTKEY],
 };
 
@@ -140,3 +153,45 @@ export const COINGECKO_IDS: Record<Blockchain, any> = {
     symbol: "one",
   },
 };
+
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC721/IERC721.sol
+export const IERC721Standard: HumanABI = [
+  "event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId)",
+  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
+  "event ApprovalForAll(address indexed owner, address indexed operator, bool approved)",
+];
+
+export const IERC721Events: Map<string, string> = IERC721Standard.reduce(
+  reduceToEvents,
+  new Map()
+);
+
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC1155/IERC1155.sol
+export const IERC1155Standard: HumanABI = [
+  "event TransferSingle(address indexed operator, address indexed from, address indexed to, uint256 id, uint256 value)",
+  "event TransferBatch(address indexed operator, address indexed from, address indexed to, uint256[] ids, uint256[] values)",
+  "event ApprovalForAll(address indexed account, address indexed operator, bool approved)",
+  "event URI(string value, uint256 indexed id)",
+];
+
+export const IERC1155Events: Map<string, string> = IERC1155Standard.reduce(
+  reduceToEvents,
+  new Map()
+);
+
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol
+export const OwnableStandard: HumanABI = [
+  "event OwnershipTransferred(address indexed previousOwner, address indexed newOwner)",
+];
+
+export const IERC20Standard: HumanABI = [
+  "event Transfer(address indexed from, address indexed to, uint256 value)",
+  "event Approval(address indexed owner, address indexed spender, uint256 value)",
+];
+
+function reduceToEvents(record: Map<string, string>, abi: string) {
+  record.set(abi.match(/^event\s(.[^()]+)/)[1], abi);
+  return record;
+}
+
+export const LLAMA_FI_COIN_API = "https://coins.llama.fi/coin/timestamps";

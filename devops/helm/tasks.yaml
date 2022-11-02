@@ -1,0 +1,126 @@
+tasks:
+  - name: calculateStatistics-daily-2018
+    cronName: calculateStatistics
+    release: onchain-release-31
+    suspend: true
+    containers:
+      - name: calculateStatistics-daily-2018-q1
+        env:
+          SALE_START_TIME: "1514764800000"
+          SALE_TIME_RANGE: "7776000000"
+          STAT_TYPE: "0"
+      - name: calculateStatistics-daily-2018-q2
+        env:
+          SALE_START_TIME: "1522627200000"
+          SALE_TIME_RANGE: "7776000000"
+          STAT_TYPE: "0"
+      - name: calculateStatistics-daily-2018-q3
+        env:
+          SALE_START_TIME: "1530489600000"
+          SALE_TIME_RANGE: "7776000000"
+          STAT_TYPE: "0"
+      - name: calculateStatistics-daily-2018-q4
+        env:
+          SALE_START_TIME: "1538352000000"
+          SALE_TIME_RANGE: "7862400000"
+          STAT_TYPE: "0"
+  - name: calculateStatistics-daily-2019
+    cronName: calculateStatistics
+    release: onchain-release-31
+    suspend: true
+    containers:
+      - name: calculateStatistics-daily-2019-q1
+        env:
+          SALE_START_TIME: "1546300800000"
+          SALE_TIME_RANGE: "7776000000"
+          STAT_TYPE: "0"
+      - name: calculateStatistics-daily-2019-q2
+        env:
+          SALE_START_TIME: "1554163200000"
+          SALE_TIME_RANGE: "7776000000"
+          STAT_TYPE: "0"
+      - name: calculateStatistics-daily-2019-q3
+        env:
+          SALE_START_TIME: "1562025600000"
+          SALE_TIME_RANGE: "7776000000"
+          STAT_TYPE: "0"
+      - name: calculateStatistics-daily-2019-q4
+        env:
+          SALE_START_TIME: "1569888000000"
+          SALE_TIME_RANGE: "7862400000"
+          STAT_TYPE: "0"
+  - name: calculateStatistics-daily-2020
+    cronName: calculateStatistics
+    release: onchain-release-31
+    suspend: true
+    containers:
+      - name: calculateStatistics-daily-2020-q1
+        env:
+          SALE_START_TIME: "1577836800000"
+          SALE_TIME_RANGE: "7862400000"
+          STAT_TYPE: "0"
+      - name: calculateStatistics-daily-2020-q2
+        env:
+          SALE_START_TIME: "1585699200000"
+          SALE_TIME_RANGE: "7862400000"
+          STAT_TYPE: "0"
+      - name: calculateStatistics-daily-2020-q3
+        env:
+          SALE_START_TIME: "1593561600000"
+          SALE_TIME_RANGE: "7862400000"
+          STAT_TYPE: "0"
+      - name: calculateStatistics-daily-2020-q4
+        env:
+          SALE_START_TIME: "1601424000000"
+          SALE_TIME_RANGE: "7948800000"
+          STAT_TYPE: "0"
+  - name: calculateStatistics-daily-2021
+    cronName: calculateStatistics
+    release: onchain-release-31
+    suspend: false
+    containers:
+      - name: calculateStatistics-daily-2021-q1
+        env:
+          SALE_START_TIME: "1609459200000"
+          SALE_TIME_RANGE: "7776000000"
+          STAT_TYPE: "0"
+      - name: calculateStatistics-daily-2021-q2
+        env:
+          SALE_START_TIME: "1617321600000"
+          SALE_TIME_RANGE: "7776000000"
+          STAT_TYPE: "0"
+      - name: calculateStatistics-daily-2021-q3
+        env:
+          SALE_START_TIME: "1625184000000"
+          SALE_TIME_RANGE: "7776000000"
+          STAT_TYPE: "0"
+      - name: calculateStatistics-daily-2021-q4
+        env:
+          SALE_START_TIME: "1633046400000"
+          SALE_TIME_RANGE: "7862400000"
+          STAT_TYPE: "0"
+  - name: calculateStatistics-daily-2022
+    cronName: calculateStatistics
+    release: onchain-release-31
+    suspend: false
+    containers:
+      - name: calculateStatistics-daily-2022-q1
+        env:
+          SALE_START_TIME: "1640995200000"
+          SALE_TIME_RANGE: "7776000000"
+          STAT_TYPE: "0"
+      - name: calculateStatistics-daily-2022-q2
+        env:
+          SALE_START_TIME: "1648857600000"
+          SALE_TIME_RANGE: "7776000000"
+          STAT_TYPE: "0"
+      - name: calculateStatistics-daily-2022-q3
+        env:
+          SALE_START_TIME: "1656720000000"
+          SALE_TIME_RANGE: "7776000000"
+          STAT_TYPE: "0"
+      - name: calculateStatistics-daily-2022-q4
+        env:
+          SALE_START_TIME: "1664582400000"
+          SALE_TIME_RANGE: "7862400000"
+          STAT_TYPE: "0"

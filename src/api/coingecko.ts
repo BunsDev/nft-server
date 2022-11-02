@@ -18,6 +18,28 @@ export class Coingecko {
     }
   }
 
+  public static async getHistoricalPriceByDate(
+    coingeckoId: string,
+    date: number | string,
+    base = "usd"
+  ): Promise<number> {
+
+    if (typeof date === "number") {
+      const d = new Date(date * 1000);
+      date = `${d.getUTCDate()}-${d.getUTCMonth()}-${d.getUTCFullYear()}`;
+    }
+
+    try {
+      const response = await axios.get(
+        `${Coingecko.PRICE_ENDPOINT}/${coingeckoId}/history?date=${date}`
+      );
+      return parseFloat(response.data.market_data.current_price[base]);
+    } catch (e) {
+      await handleError(e, "coingecko:getPricesById");
+      return 0;
+    }
+  }
+
   public static async getHistoricalPricesById(
     coingeckoId: string,
     base: string

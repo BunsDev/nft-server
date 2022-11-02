@@ -1,8 +1,21 @@
-import { Marketplace, SaleData } from "../types";
+import { getLogger } from "../utils/logger";
+import { Marketplace, RecordState, SaleData } from "../types";
 import { handleError } from "../utils";
 import dynamodb from "../utils/dynamodb";
 
 const ONE_DAY_MILISECONDS = 86400 * 1000;
+// 400K minus 1%
+const DYNAMODB_MAX_SIZE = 4e5 - 4e5 * 0.01;
+
+const LOGGER = getLogger("SALE_MODEL", {
+  datadog: !!process.env.DATADOG_API_KEY,
+});
+
+type SaleMetadata = {
+  PK: string;
+  SK: string;
+  metadata: any;
+};
 
 export class Sale {
   txnHash: string;
@@ -21,29 +34,74 @@ export class Sale {
     marketplace,
     sales,
   }: {
-    slug: string;
+    slug: string | Record<string, any>;
     marketplace: Marketplace;
     sales: SaleData[];
   }) {
     try {
       const batchWriteStep = 25;
       for (let i = 0; i < sales.length; i += batchWriteStep) {
+        const deleteLegacy: Array<{
+          PK: string;
+          SK: string;
+        }> = [];
         const items = sales
           .slice(i, i + batchWriteStep)
           .reduce((sales: any, sale) => {
-            const { timestamp, txnHash, ...data } = sale;
+            const { timestamp, txnHash, hasCollection, ...data } = sale;
             const sortKeys = sales.map((sale: any) => sale.SK);
-            const sortKey = `${timestamp}#txnHash#${txnHash}`;
+            const legacySK = `${timestamp}#txnHash#${txnHash}`;
+            const sortKey = `${timestamp}#txnHash#${txnHash}#${sale.logIndex}`;
+            const saleSlug =
+              typeof slug === "string" ? slug : sale.contractAddress;
             if (!sortKeys.includes(sortKey)) {
+              deleteLegacy.push({
+                PK: `sales#${saleSlug}#marketplace#${marketplace}`,
+                SK: legacySK,
+              });
               sales.push({
-                PK: `sales#${slug}#marketplace#${marketplace}`,
+                PK: `sales#${saleSlug}#marketplace#${marketplace}`,
                 SK: sortKey,
+                recordState: hasCollection
+                  ? RecordState.COLLECTION_EXISTS
+                  : RecordState.UNPROCESSED,
                 ...data,
               });
+            } else {
+              LOGGER.alert(`Duplicate Sale Detected`, { sale });
             }
             return sales;
           }, []);
+        const extractMetadata =
+          Math.max(...items.map((item: any) => JSON.stringify(item).length)) >
+          DYNAMODB_MAX_SIZE;
+        if (extractMetadata) {
+          const metadata: Array<SaleMetadata> = [];
+          try {
+            items.forEach((i: any) => {
+              if (!(JSON.stringify(i.metadata).length > DYNAMODB_MAX_SIZE)) {
+                metadata.push({
+                  PK: "sale#metadata",
+                  SK: i.SK,
+                  metadata: i.metadata,
+                });
+              } else {
+                LOGGER.warn(`Large metadata`, {
+                  SK: i.SK,
+                  metdata: i.metadata,
+                });
+              }
+              i.metadata = null;
+            });
+            await dynamodb.batchWrite(metadata);
+          } catch (e) {
+            LOGGER.alert(`Sale metadata failure`, { metadata, e });
+          }
+        }
         await dynamodb.batchWrite(items);
+        for (const Key of deleteLegacy) {
+          await dynamodb.delete({ Key });
+        }
       }
       return true;
     } catch (e) {

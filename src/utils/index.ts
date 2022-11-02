@@ -2,7 +2,22 @@ import axios from "axios";
 import web3 from "web3";
 import { Block } from "web3-eth";
 import { Log } from "web3-core";
-import { Blockchain, Marketplace, SaleData } from "../types";
+import {
+  Blockchain,
+  DailyVolumeRecord,
+  DateTruncate,
+  Marketplace,
+  SaleData,
+  SerializedBigNumber,
+  StatType,
+} from "../types";
+import { getLogger } from "./logger";
+import { BigNumber } from "ethers";
+import { ONE_DAY_MILISECONDS } from "../constants";
+
+const LOGGER = getLogger("ERROR_HANDLER", {
+  datadog: !!process.env.DATADOG_API_KEY,
+});
 
 export const sleep = async (seconds: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, seconds * 1000));
@@ -60,18 +75,30 @@ export function getPriceAtDate(
 export async function handleError(error: Error, context: string) {
   if (axios.isAxiosError(error)) {
     if (error.response?.status === 404) {
-      console.error(`Error [${context}] - not found: ${error.message}`);
+      LOGGER.error(`Error [${context}] - not found: ${error.message}`, {
+        error,
+        stack: error.stack,
+      });
     }
     if (error.response?.status === 429) {
       // Backoff for 1 minute if rate limited
-      console.error(`Error [${context}] - too many requests: ${error.message}`);
+      LOGGER.error(`Error [${context}] - too many requests: ${error.message}`, {
+        error,
+        stack: error.stack,
+      });
       await sleep(60);
     }
     if (error.response?.status === 500 || error.response.status === 504) {
-      console.error(`Error [${context}] - server error: ${error.message}`);
+      LOGGER.error(`Error [${context}] - server error: ${error.message}`, {
+        error,
+        stack: error.stack,
+      });
     }
   }
-  console.error(`Error [${context}] - other error: ${error.message}`);
+  LOGGER.error(`Error [${context}] - other error: ${error.message}`, {
+    error,
+    stack: error.stack,
+  });
 }
 
 export function filterObject(object: Object) {
@@ -223,3 +250,132 @@ export const getSalesFromLogs = async ({
     latestBlock: params.toBlock,
   };
 };
+
+export function restoreBigNumber(
+  bigNum: SerializedBigNumber | BigNumber
+): BigNumber {
+  if (bigNum instanceof BigNumber) {
+    return bigNum;
+  }
+  return BigNumber.from(bigNum.hex || bigNum._hex);
+}
+
+export async function awaitSequence(
+  ...promiseFns: Array<(val: any) => Promise<unknown>>
+): Promise<unknown> {
+  return promiseFns.reduce((p, fn) => p.then(fn), Promise.resolve(!0));
+}
+
+export function fillMissingVolumeRecord(
+  volumes: DailyVolumeRecord,
+  timestamps: Array<number> = [],
+  step = ONE_DAY_MILISECONDS
+): DailyVolumeRecord {
+  if (!timestamps.length) {
+    timestamps = Object.keys(volumes).map((_) => parseInt(_));
+  }
+  const [start, end] = [Math.min(...timestamps), Math.max(...timestamps)];
+  for (let i = start; i <= end; i += step) {
+    if (!(i in volumes)) {
+      volumes[i] = {
+        volume: 0,
+        volumeUSD: 0,
+      };
+    }
+  }
+
+  return volumes;
+}
+
+export function mergeDailyVolumeRecords(
+  ...dailyVolumeRecords: Array<DailyVolumeRecord>
+): DailyVolumeRecord {
+  const volumes: DailyVolumeRecord = {};
+  for (const dailyVolume of dailyVolumeRecords) {
+    for (const [timestamp, volumeRecord] of Object.entries(dailyVolume)) {
+      if (!(timestamp in volumes)) {
+        volumes[timestamp] = {
+          volume: 0,
+          volumeUSD: 0,
+        };
+      }
+
+      volumes[timestamp].volume += volumeRecord.volume ?? 0;
+      volumes[timestamp].volumeUSD += volumeRecord.volumeUSD ?? 0;
+    }
+  }
+  return volumes;
+}
+
+export function truncateDate(
+  timestamp: number,
+  truncate: DateTruncate | number = DateTruncate.DAY
+) {
+  switch (truncate) {
+    case DateTruncate.HOUR:
+    case DateTruncate.DAY:
+      return timestamp - (timestamp % truncate);
+    case DateTruncate.WEEK:
+      timestamp = truncateDate(timestamp);
+      // eslint-disable-next-line no-case-declarations
+      const day = new Date(timestamp).getUTCDay();
+      return timestamp - day * DateTruncate.DAY;
+    default:
+      if (
+        !Object.values(DateTruncate).some(
+          (v: DateTruncate) => truncate % v === 0
+        )
+      ) {
+        throw new Error(
+          "Truncate should be a multiple of at least one DateTruncate"
+        );
+      }
+      switch (0) {
+        case truncate % DateTruncate.WEEK:
+          timestamp = truncateDate(timestamp, DateTruncate.WEEK);
+          return (
+            timestamp -
+            DateTruncate.DAY * 7 * (truncate / DateTruncate.WEEK - 1)
+          );
+        case truncate % DateTruncate.DAY:
+          timestamp = truncateDate(timestamp, DateTruncate.DAY);
+          return (
+            timestamp - DateTruncate.DAY * (truncate / DateTruncate.DAY - 1)
+          );
+        case truncate % DateTruncate.HOUR:
+          timestamp = truncateDate(timestamp, DateTruncate.HOUR);
+          return (
+            timestamp - DateTruncate.HOUR * (truncate / DateTruncate.HOUR - 1)
+          );
+      }
+  }
+}
+
+export function extendDate(
+  timestamp: number,
+  extension = DateTruncate.DAY,
+  toEndOf = true
+) {
+  switch (extension) {
+    case DateTruncate.HOUR:
+    case DateTruncate.DAY:
+      return truncateDate(timestamp, extension) + extension - (toEndOf ? 1 : 0);
+    case DateTruncate.WEEK:
+      timestamp = truncateDate(timestamp);
+      // eslint-disable-next-line no-case-declarations
+      const day = new Date(timestamp).getUTCDay();
+      return timestamp + (7 - day) * DateTruncate.DAY - (toEndOf ? 1 : 0);
+  }
+}
+
+export function getDateTruncateForStatType(statType: StatType) {
+  switch (statType) {
+    case StatType.WEEKLY_COLLECTION:
+      return DateTruncate.WEEK;
+    case StatType.HOURLY_COLLECTION:
+      return DateTruncate.HOUR;
+    case StatType.DAILY_COLLECTION:
+    default:
+      return DateTruncate.DAY;
+  }
+}

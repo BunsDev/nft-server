@@ -107,55 +107,55 @@ export class HistoricalStatistics {
             marketplace,
           });
 
-        result.fromSales.output = await dynamodb.transactWrite({
-          updateItems: [
-            {
-              Key: {
-                PK: `collection#${slug}`,
-                SK: "overview",
-              },
-              UpdateExpression: `
-                SET fromSales = :fromSales,
-                    totalVolume = :totalVolume,
-                    totalVolumeUSD = :totalVolumeUSD`,
-              ExpressionAttributeValues: {
-                ":fromSales": true,
-                ":totalVolume": totalVolume,
-                ":totalVolumeUSD": totalVolumeUSD,
-              },
-            },
-            {
-              Key: {
-                PK: `collection#${slug}`,
-                SK: `chain#${chain}`,
-              },
-              UpdateExpression: `
-                SET fromSales = :fromSales,
-                    totalVolume = :totalVolume,
-                    totalVolumeUSD = :totalVolumeUSD`,
-              ExpressionAttributeValues: {
-                ":fromSales": true,
-                ":totalVolume": totalVolume,
-                ":totalVolumeUSD": totalVolumeUSD,
-              },
-            },
-            {
-              Key: {
-                PK: `collection#${slug}`,
-                SK: `marketplace#${marketplace}`,
-              },
-              UpdateExpression: `
-                SET fromSales = :fromSales,
-                    totalVolume = :totalVolume,
-                    totalVolumeUSD = :totalVolumeUSD`,
-              ExpressionAttributeValues: {
-                ":fromSales": true,
-                ":totalVolume": totalVolume,
-                ":totalVolumeUSD": totalVolumeUSD,
-              },
-            },
-          ],
-        });
+        // result.fromSales.output = await dynamodb.transactWrite({
+        //   updateItems: [
+        //     {
+        //       Key: {
+        //         PK: `collection#${slug}`,
+        //         SK: "overview"
+        //       },
+        //       UpdateExpression: `
+        //         SET fromSales = :fromSales,
+        //             totalVolume = :totalVolume,
+        //             totalVolumeUSD = :totalVolumeUSD`,
+        //       ExpressionAttributeValues: {
+        //         ":fromSales": true,
+        //         ":totalVolume": totalVolume,
+        //         ":totalVolumeUSD": totalVolumeUSD
+        //       }
+        //     },
+        //     {
+        //       Key: {
+        //         PK: `collection#${slug}`,
+        //         SK: `chain#${chain}`
+        //       },
+        //       UpdateExpression: `
+        //         SET fromSales = :fromSales,
+        //             totalVolume = :totalVolume,
+        //             totalVolumeUSD = :totalVolumeUSD`,
+        //       ExpressionAttributeValues: {
+        //         ":fromSales": true,
+        //         ":totalVolume": totalVolume,
+        //         ":totalVolumeUSD": totalVolumeUSD
+        //       }
+        //     },
+        //     {
+        //       Key: {
+        //         PK: `collection#${slug}`,
+        //         SK: `marketplace#${marketplace}`
+        //       },
+        //       UpdateExpression: `
+        //         SET fromSales = :fromSales,
+        //             totalVolume = :totalVolume,
+        //             totalVolumeUSD = :totalVolumeUSD`,
+        //       ExpressionAttributeValues: {
+        //         ":fromSales": true,
+        //         ":totalVolume": totalVolume,
+        //         ":totalVolumeUSD": totalVolumeUSD
+        //       }
+        //     }
+        //   ]
+        // });
 
         result.fromSales.result = true;
       }
@@ -174,96 +174,96 @@ export class HistoricalStatistics {
           volumeUSD = -volumeUSD;
         }
 
-        result.volumesResult[timestamp].output = await dynamodb.transactWrite({
-          updateItems: [
-            {
-              Key: {
-                PK: `collection#${slug}`,
-                SK: "overview",
-              },
-              UpdateExpression: `
-                ADD totalVolume :volume,
-                    totalVolumeUSD  :volumeUSD
-              `,
-              ExpressionAttributeValues: {
-                ":volume": volume,
-                ":volumeUSD": volumeUSD,
-              },
-            },
-            {
-              Key: {
-                PK: `collection#${slug}`,
-                SK: `chain#${chain}`,
-              },
-              UpdateExpression: `
-                ADD totalVolume :volume,
-                    totalVolumeUSD  :volumeUSD
-              `,
-              ExpressionAttributeValues: {
-                ":volume": volume,
-                ":volumeUSD": volumeUSD,
-              },
-            },
-            {
-              Key: {
-                PK: `collection#${slug}`,
-                SK: `marketplace#${marketplace}`,
-              },
-              UpdateExpression: `
-                ADD totalVolume :volume,
-                    totalVolumeUSD  :volumeUSD
-              `,
-              ExpressionAttributeValues: {
-                ":volume": volume,
-                ":volumeUSD": volumeUSD,
-              },
-            },
-            {
-              Key: {
-                PK: `statistics#${slug}`,
-                SK: `${timestamp}`,
-              },
-              UpdateExpression: `
-                ADD #chainvolume :volume,
-                    #chainvolumeUSD :volumeUSD,
-                    #marketplacevolume :volume,
-                    #marketplacevolumeUSD :volumeUSD
-              `,
-              ExpressionAttributeNames: {
-                "#chainvolume": `chain_${chain}_volume`,
-                "#chainvolumeUSD": `chain_${chain}_volumeUSD`,
-                "#marketplacevolume": `marketplace_${marketplace}_volume`,
-                "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
-              },
-              ExpressionAttributeValues: {
-                ":volume": volume,
-                ":volumeUSD": volumeUSD,
-              },
-            },
-            {
-              Key: {
-                PK: `globalStatistics`,
-                SK: `${timestamp}`,
-              },
-              UpdateExpression: `
-                ADD #chainvolume :volume,
-                    #chainvolumeUSD :volumeUSD,
-                    #marketplacevolume :volume,
-                    #marketplacevolumeUSD :volumeUSD
-              `,
-              ExpressionAttributeNames: {
-                "#chainvolume": `chain_${chain}_volume`,
-                "#chainvolumeUSD": `chain_${chain}_volumeUSD`,
-                "#marketplacevolume": `marketplace_${marketplace}_volume`,
-                "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
-              },
-              ExpressionAttributeValues: {
-                ":volume": volume,
-                ":volumeUSD": volumeUSD,
-              },
-            },
-          ],
-        });
+        // result.volumesResult[timestamp].output = await dynamodb.transactWrite({
+        //   updateItems: [
+        //     {
+        //       Key: {
+        //         PK: `collection#${slug}`,
+        //         SK: "overview",
+        //       },
+        //       UpdateExpression: `
+        //         ADD totalVolume :volume,
+        //             totalVolumeUSD  :volumeUSD
+        //       `,
+        //       ExpressionAttributeValues: {
+        //         ":volume": volume,
+        //         ":volumeUSD": volumeUSD,
+        //       },
+        //     },
+        //     {
+        //       Key: {
+        //         PK: `collection#${slug}`,
+        //         SK: `chain#${chain}`,
+        //       },
+        //       UpdateExpression: `
+        //         ADD totalVolume :volume,
+        //             totalVolumeUSD  :volumeUSD
+        //       `,
+        //       ExpressionAttributeValues: {
+        //         ":volume": volume,
+        //         ":volumeUSD": volumeUSD,
+        //       },
+        //     },
+        //     {
+        //       Key: {
+        //         PK: `collection#${slug}`,
+        //         SK: `marketplace#${marketplace}`,
+        //       },
+        //       UpdateExpression: `
+        //         ADD totalVolume :volume,
+        //             totalVolumeUSD  :volumeUSD
+        //       `,
+        //       ExpressionAttributeValues: {
+        //         ":volume": volume,
+        //         ":volumeUSD": volumeUSD,
+        //       },
+        //     },
+        //     {
+        //       Key: {
+        //         PK: `statistics#${slug}`,
+        //         SK: `${timestamp}`,
+        //       },
+        //       UpdateExpression: `
+        //         ADD #chainvolume :volume,
+        //             #chainvolumeUSD :volumeUSD,
+        //             #marketplacevolume :volume,
+        //             #marketplacevolumeUSD :volumeUSD
+        //       `,
+        //       ExpressionAttributeNames: {
+        //         "#chainvolume": `chain_${chain}_volume`,
+        //         "#chainvolumeUSD": `chain_${chain}_volumeUSD`,
+        //         "#marketplacevolume": `marketplace_${marketplace}_volume`,
+        //         "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
+        //       },
+        //       ExpressionAttributeValues: {
+        //         ":volume": volume,
+        //         ":volumeUSD": volumeUSD,
+        //       },
+        //     },
+        //     {
+        //       Key: {
+        //         PK: `globalStatistics`,
+        //         SK: `${timestamp}`,
+        //       },
+        //       UpdateExpression: `
+        //         ADD #chainvolume :volume,
+        //             #chainvolumeUSD :volumeUSD,
+        //             #marketplacevolume :volume,
+        //             #marketplacevolumeUSD :volumeUSD
+        //       `,
+        //       ExpressionAttributeNames: {
+        //         "#chainvolume": `chain_${chain}_volume`,
+        //         "#chainvolumeUSD": `chain_${chain}_volumeUSD`,
+        //         "#marketplacevolume": `marketplace_${marketplace}_volume`,
+        //         "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
+        //       },
+        //       ExpressionAttributeValues: {
+        //         ":volume": volume,
+        //         ":volumeUSD": volumeUSD,
+        //       },
+        //     },
+        //   ],
+        // });
         result.volumesResult[timestamp].result = true;
       } catch (e) {
         if (failureAttempt < 3) {

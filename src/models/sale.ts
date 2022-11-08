@@ -93,14 +93,14 @@ export class Sale {
               }
               i.metadata = null;
             });
-            await dynamodb.batchWrite(metadata);
+            //await dynamodb.batchWrite(metadata);
           } catch (e) {
             LOGGER.alert(`Sale metadata failure`, { metadata, e });
           }
         }
-        await dynamodb.batchWrite(items);
+        //await dynamodb.batchWrite(items);
         for (const Key of deleteLegacy) {
-          await dynamodb.delete({ Key });
+          //await dynamodb.delete({ Key });
         }
       }
       return true;

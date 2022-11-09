@@ -162,20 +162,20 @@ export default class RaribleProvider
             )
           ).filter((e) => !e.removed);
           const queryFilterEnd = performance.now();
-          // this.MetricsReporter.submit(
-          //   `rarible.${chain}.contract_queryFilter.blockRange`,
-          //   toBlock - fromBlock
-          // );
-          // this.MetricsReporter.submit(
-          //   `rarible.${chain}.contract_queryFilter.latency`,
-          //   queryFilterEnd - queryFilterStart
-          // );
+          this.MetricsReporter.submit(
+            `rarible.${chain}.contract_queryFilter.blockRange`,
+            toBlock - fromBlock
+          );
+          this.MetricsReporter.submit(
+            `rarible.${chain}.contract_queryFilter.latency`,
+            queryFilterEnd - queryFilterStart
+          );
 
-          // LOGGER.debug(
-          //   `Found ${events.length} events between ${fromBlock} to ${toBlock}`
-          // );
+          LOGGER.debug(
+            `Found ${events.length} events between ${fromBlock} to ${toBlock}`
+          );
 
-          // LOGGER.debug("Rarible Events", { fromBlock, toBlock, events });
+          LOGGER.debug("Rarible Events", { fromBlock, toBlock, events });
 
           if (events.length) {
             matchDatas = await this.fetchMatchData(events);
@@ -275,17 +275,62 @@ export default class RaribleProvider
     const transactions = await Promise.all(
       events.map((e: Event) => provider.getTransaction(e.transactionHash))
     );
-    return transactions.map((t: any) => {
-      const data = iface.parseTransaction(t);
-      return {
-        transactionHash: t.hash,
-        buyer: t.from,
-        contractAddress: `0x${data.args.direct.nftData.substring(26, 66)}`,
-        paymentAddress: data.args.direct.paymentToken,
-        seller: data.args.direct.sellOrderMaker,
-        tokenID: parseInt(data.args.direct.nftData.substring(66), 16).toString()
-      };
+    const datas: MatchData[] = [];
+
+    transactions.map((t: any) => {
+      try {
+        const data = iface.parseTransaction(t);
+        if (data.args.direct.nftData.length > 130) {
+          // CASE: this match has multiple trades in it and it ruins stuff
+          console.log("multi trade");
+          return;
+        } else if (data.args.direct != null) {
+          datas.push({
+            transactionHash: t.hash,
+            buyer: t.from,
+            contractAddress: `0x${data.args.direct.nftData.substring(26, 66)}`,
+            paymentAddress: data.args.direct.paymentToken,
+            seller: data.args.direct.sellOrderMaker,
+            tokenID: parseInt(
+              data.args.direct.nftData.substring(66),
+              16
+            ).toString()
+          });
+        } else if (data.args.orderRight != null) {
+          datas.push({
+            transactionHash: t.hash,
+            buyer: data.args.orderRight.taker,
+            contractAddress: `0x${data.args.orderRight.makeAsset.assetType.data.substring(
+              26,
+              66
+            )}`,
+            paymentAddress: `0x${data.args.orderRight.takeAsset.assetType.data.substring(
+              26,
+              66
+            )}`,
+            seller: data.args.orderRight.maker,
+            tokenID: parseInt(
+              data.args.orderRight.makeAsset.assetType.data.substring(66),
+              16
+            ).toString()
+          });
+        } else {
+          console.log("need a new case");
+        }
+      } catch (e) {
+        let a = t;
+        // CASE: no matching function sighash
+        let c;
+        try {
+          c = iface.parseTransaction(t);
+        } catch {
+          console.log("cant parse");
+        }
+        let b = e;
+      }
     });
+
+    return datas;
   }
 
   public parseEvents(

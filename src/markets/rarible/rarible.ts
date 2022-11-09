@@ -162,20 +162,20 @@ export default class RaribleProvider
             )
           ).filter((e) => !e.removed);
           const queryFilterEnd = performance.now();
-          this.MetricsReporter.submit(
-            `rarible.${chain}.contract_queryFilter.blockRange`,
-            toBlock - fromBlock
-          );
-          this.MetricsReporter.submit(
-            `rarible.${chain}.contract_queryFilter.latency`,
-            queryFilterEnd - queryFilterStart
-          );
+          // this.MetricsReporter.submit(
+          //   `rarible.${chain}.contract_queryFilter.blockRange`,
+          //   toBlock - fromBlock
+          // );
+          // this.MetricsReporter.submit(
+          //   `rarible.${chain}.contract_queryFilter.latency`,
+          //   queryFilterEnd - queryFilterStart
+          // );
 
-          LOGGER.debug(
-            `Found ${events.length} events between ${fromBlock} to ${toBlock}`
-          );
+          // LOGGER.debug(
+          //   `Found ${events.length} events between ${fromBlock} to ${toBlock}`
+          // );
 
-          LOGGER.debug("Rarible Events", { fromBlock, toBlock, events });
+          // LOGGER.debug("Rarible Events", { fromBlock, toBlock, events });
 
           if (events.length) {
             matchDatas = await this.fetchMatchData(events);

@@ -1,4 +1,4 @@
-import { Event, ethers } from "ethers";
+import { Event, BigNumber } from "ethers";
 import { getLogger } from "../../utils/logger";
 import { IMarketOnChainProvider } from "../../interfaces";
 import {
@@ -15,20 +15,12 @@ import { ClusterWorker, IClusterProvider } from "../../utils/cluster";
 import dynamodb from "../../utils/dynamodb";
 import BaseProvider from "../BaseProvider";
 import { Result } from "ethers/lib/utils";
+import { fetchMatchData, MatchData } from "./helpers";
 
 const LOGGER = getLogger("RARIBLE_PROVIDER", {
   datadog: !!process.env.DATADOG_API_KEY
 });
-type MatchData = {
-  transactionHash: string;
-  buyer: string;
-  seller: string;
-  contractAddress: string;
-  paymentAddress: string;
-  tokenID: string;
-};
 
-let matchDatas: MatchData[];
 const MATURE_BLOCK_AGE = process.env.MATURE_BLOCK_AGE
   ? parseInt(process.env.MATURE_BLOCK_AGE)
   : 250;
@@ -56,7 +48,7 @@ export default class RaribleProvider
 {
   public CONTRACT_NAME = "rarible";
   public market = Marketplace.Rarible;
-
+  private matchDatas: MatchData[];
   private shapeCount: Record<string, number> = {};
   private shapeTx: Record<string, string> = {};
 
@@ -178,7 +170,7 @@ export default class RaribleProvider
           LOGGER.debug("Rarible Events", { fromBlock, toBlock, events });
 
           if (events.length) {
-            matchDatas = await this.fetchMatchData(events);
+            this.matchDatas = await fetchMatchData(events);
             this.retrieveBlocks(fromBlock, toBlock, chain);
             const blocks = (
               await Promise.all(this.getBlockList(fromBlock, toBlock))
@@ -262,76 +254,6 @@ export default class RaribleProvider
       }
     }
   }
-  private async fetchMatchData(events: Array<Event>): Promise<MatchData[]> {
-    const provider = new ethers.providers.StaticJsonRpcProvider(
-      "https://eth-mainnet.alchemyapi.io/v2/mVgetx4X8OxVRjV0qTRw6QtJKHd0VWh8"
-    );
-    const ABI = `[{"anonymous":false,"inputs":[{"indexed":false,"internalType":"bytes32","name":"hash","type":"bytes32"}],"name":"Cancel","type":"event"},
-      {"anonymous":false,"inputs":[{"indexed":false,"internalType":"bytes32","name":"leftHash","type":"bytes32"},{"indexed":false,"internalType":"bytes32",
-      "name":"rightHash","type":"bytes32"},{"indexed":false,"internalType":"uint256","name":"newLeftFill","type":"uint256"},{"indexed":false,"internalType":"uint256",
-      "name":"newRightFill","type":"uint256"}],"name":"Match","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes4","name":"assetType",
-      "type":"bytes4"},{"indexed":false,"internalType":"address","name":"matcher","type":"address"}],"name":"MatcherChange","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"previousOwner","type":"address"},{"indexed":true,"internalType":"address","name":"newOwner","type":"address"}],"name":"OwnershipTransferred","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes4","name":"assetType","type":"bytes4"},{"indexed":false,"internalType":"address","name":"proxy","type":"address"}],"name":"ProxyChange","type":"event"},{"inputs":[{"internalType":"address","name":"_transferProxy","type":"address"},{"internalType":"address","name":"_erc20TransferProxy","type":"address"},{"internalType":"uint256","name":"newProtocolFee","type":"uint256"},{"internalType":"address","name":"newDefaultFeeReceiver","type":"address"},{"internalType":"contract IRoyaltiesProvider","name":"newRoyaltiesProvider","type":"address"}],"name":"__ExchangeV2_init","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"components":[{"internalType":"address","name":"maker","type":"address"},{"components":[{"components":[{"internalType":"bytes4","name":"assetClass","type":"bytes4"},{"internalType":"bytes","name":"data","type":"bytes"}],"internalType":"struct LibAsset.AssetType","name":"assetType","type":"tuple"},{"internalType":"uint256","name":"value","type":"uint256"}],"internalType":"struct LibAsset.Asset","name":"makeAsset","type":"tuple"},{"internalType":"address","name":"taker","type":"address"},{"components":[{"components":[{"internalType":"bytes4","name":"assetClass","type":"bytes4"},{"internalType":"bytes","name":"data","type":"bytes"}],"internalType":"struct LibAsset.AssetType","name":"assetType","type":"tuple"},{"internalType":"uint256","name":"value","type":"uint256"}],"internalType":"struct LibAsset.Asset","name":"takeAsset","type":"tuple"},{"internalType":"uint256","name":"salt","type":"uint256"},{"internalType":"uint256","name":"start","type":"uint256"},{"internalType":"uint256","name":"end","type":"uint256"},{"internalType":"bytes4","name":"dataType","type":"bytes4"},{"internalType":"bytes","name":"data","type":"bytes"}],"internalType":"struct LibOrder.Order","name":"order","type":"tuple"}],"name":"cancel","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"components":[{"internalType":"address","name":"bidMaker","type":"address"},{"internalType":"uint256","name":"bidNftAmount","type":"uint256"},{"internalType":"bytes4","name":"nftAssetClass","type":"bytes4"},{"internalType":"bytes","name":"nftData","type":"bytes"},{"internalType":"uint256","name":"bidPaymentAmount","type":"uint256"},{"internalType":"address","name":"paymentToken","type":"address"},{"internalType":"uint256","name":"bidSalt","type":"uint256"},{"internalType":"uint256","name":"bidStart","type":"uint256"},{"internalType":"uint256","name":"bidEnd","type":"uint256"},{"internalType":"bytes4","name":"bidDataType","type":"bytes4"},{"internalType":"bytes","name":"bidData","type":"bytes"},{"internalType":"bytes","name":"bidSignature","type":"bytes"},{"internalType":"uint256","name":"sellOrderPaymentAmount","type":"uint256"},{"internalType":"uint256","name":"sellOrderNftAmount","type":"uint256"},{"internalType":"bytes","name":"sellOrderData","type":"bytes"}],"internalType":"struct LibDirectTransfer.AcceptBid","name":"direct","type":"tuple"}],"name":"directAcceptBid","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"components":[{"internalType":"address","name":"sellOrderMaker","type":"address"},{"internalType":"uint256","name":"sellOrderNftAmount","type":"uint256"},{"internalType":"bytes4","name":"nftAssetClass","type":"bytes4"},{"internalType":"bytes","name":"nftData","type":"bytes"},{"internalType":"uint256","name":"sellOrderPaymentAmount","type":"uint256"},{"internalType":"address","name":"paymentToken","type":"address"},{"internalType":"uint256","name":"sellOrderSalt","type":"uint256"},{"internalType":"uint256","name":"sellOrderStart","type":"uint256"},{"internalType":"uint256","name":"sellOrderEnd","type":"uint256"},{"internalType":"bytes4","name":"sellOrderDataType","type":"bytes4"},{"internalType":"bytes","name":"sellOrderData","type":"bytes"},{"internalType":"bytes","name":"sellOrderSignature","type":"bytes"},{"internalType":"uint256","name":"buyOrderPaymentAmount","type":"uint256"},{"internalType":"uint256","name":"buyOrderNftAmount","type":"uint256"},{"internalType":"bytes","name":"buyOrderData","type":"bytes"}],"internalType":"struct LibDirectTransfer.Purchase","name":"direct","type":"tuple"}],"name":"directPurchase","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"name":"fills","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"components":[{"internalType":"address","name":"maker","type":"address"},{"components":[{"components":[{"internalType":"bytes4","name":"assetClass","type":"bytes4"},{"internalType":"bytes","name":"data","type":"bytes"}],"internalType":"struct LibAsset.AssetType","name":"assetType","type":"tuple"},{"internalType":"uint256","name":"value","type":"uint256"}],"internalType":"struct LibAsset.Asset","name":"makeAsset","type":"tuple"},{"internalType":"address","name":"taker","type":"address"},{"components":[{"components":[{"internalType":"bytes4","name":"assetClass","type":"bytes4"},{"internalType":"bytes","name":"data","type":"bytes"}],"internalType":"struct LibAsset.AssetType","name":"assetType","type":"tuple"},{"internalType":"uint256","name":"value","type":"uint256"}],"internalType":"struct LibAsset.Asset","name":"takeAsset","type":"tuple"},{"internalType":"uint256","name":"salt","type":"uint256"},{"internalType":"uint256","name":"start","type":"uint256"},{"internalType":"uint256","name":"end","type":"uint256"},{"internalType":"bytes4","name":"dataType","type":"bytes4"},{"internalType":"bytes","name":"data","type":"bytes"}],"internalType":"struct LibOrder.Order","name":"orderLeft","type":"tuple"},{"internalType":"bytes","name":"signatureLeft","type":"bytes"},{"components":[{"internalType":"address","name":"maker","type":"address"},{"components":[{"components":[{"internalType":"bytes4","name":"assetClass","type":"bytes4"},{"internalType":"bytes","name":"data","type":"bytes"}],"internalType":"struct LibAsset.AssetType","name":"assetType","type":"tuple"},{"internalType":"uint256","name":"value","type":"uint256"}],"internalType":"struct LibAsset.Asset","name":"makeAsset","type":"tuple"},{"internalType":"address","name":"taker","type":"address"},{"components":[{"components":[{"internalType":"bytes4","name":"assetClass","type":"bytes4"},{"internalType":"bytes","name":"data","type":"bytes"}],"internalType":"struct LibAsset.AssetType","name":"assetType","type":"tuple"},{"internalType":"uint256","name":"value","type":"uint256"}],"internalType":"struct LibAsset.Asset","name":"takeAsset","type":"tuple"},{"internalType":"uint256","name":"salt","type":"uint256"},{"internalType":"uint256","name":"start","type":"uint256"},{"internalType":"uint256","name":"end","type":"uint256"},{"internalType":"bytes4","name":"dataType","type":"bytes4"},{"internalType":"bytes","name":"data","type":"bytes"}],"internalType":"struct LibOrder.Order","name":"orderRight","type":"tuple"},{"internalType":"bytes","name":"signatureRight","type":"bytes"}],"name":"matchOrders","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"renounceOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"royaltiesRegistry","outputs":[{"internalType":"contract IRoyaltiesProvider","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes4","name":"assetType","type":"bytes4"},{"internalType":"address","name":"matcher","type":"address"}],"name":"setAssetMatcher","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"contract IRoyaltiesProvider","name":"newRoyaltiesRegistry","type":"address"}],"name":"setRoyaltiesRegistry","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes4","name":"assetType","type":"bytes4"},{"internalType":"address","name":"proxy","type":"address"}],"name":"setTransferProxy","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"}]`;
-    const iface = new ethers.utils.Interface(ABI);
-    const transactions = await Promise.all(
-      events.map((e: Event) => provider.getTransaction(e.transactionHash))
-    );
-    const datas: MatchData[] = [];
-
-    transactions.map((t: any) => {
-      try {
-        const data = iface.parseTransaction(t);
-        if (data.args.direct.nftData.length > 130) {
-          // CASE: this match has multiple trades in it and it ruins stuff
-          console.log("multi trade");
-          return;
-        } else if (data.args.direct != null) {
-          datas.push({
-            transactionHash: t.hash,
-            buyer: t.from,
-            contractAddress: `0x${data.args.direct.nftData.substring(26, 66)}`,
-            paymentAddress: data.args.direct.paymentToken,
-            seller: data.args.direct.sellOrderMaker,
-            tokenID: parseInt(
-              data.args.direct.nftData.substring(66),
-              16
-            ).toString()
-          });
-        } else if (data.args.orderRight != null) {
-          datas.push({
-            transactionHash: t.hash,
-            buyer: data.args.orderRight.taker,
-            contractAddress: `0x${data.args.orderRight.makeAsset.assetType.data.substring(
-              26,
-              66
-            )}`,
-            paymentAddress: `0x${data.args.orderRight.takeAsset.assetType.data.substring(
-              26,
-              66
-            )}`,
-            seller: data.args.orderRight.maker,
-            tokenID: parseInt(
-              data.args.orderRight.makeAsset.assetType.data.substring(66),
-              16
-            ).toString()
-          });
-        } else {
-          console.log("need a new case");
-        }
-      } catch (e) {
-        let a = t;
-        // CASE: no matching function sighash
-        let c;
-        try {
-          c = iface.parseTransaction(t);
-        } catch {
-          console.log("cant parse");
-        }
-        let b = e;
-      }
-    });
-
-    return datas;
-  }
 
   public parseEvents(
     events: Array<Event>,
@@ -339,7 +261,7 @@ export default class RaribleProvider
   ): Array<EventMetadata> {
     const meta: Array<EventMetadata> = [];
     for (const event of events) {
-      const matchData = matchDatas.find(
+      const matchData = this.matchDatas.find(
         (d: MatchData) => d.transactionHash == event.transactionHash
       );
 
@@ -352,10 +274,7 @@ export default class RaribleProvider
         eventSignatures: [event.eventSignature],
         hash: event.transactionHash,
         logIndex: event.logIndex,
-        payment: {
-          address: matchData.paymentAddress,
-          amount: parsed.decodedData.newLeftFill
-        },
+        payment: matchData.payment,
         price: parsed.decodedData.newLeftFill,
         seller: matchData.seller,
         tokenID: matchData.tokenID,

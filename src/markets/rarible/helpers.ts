@@ -14,31 +14,38 @@ type Payment = {
   address: string;
   amount: BigNumber;
 };
+type Log = {
+  address: string;
+  blockHash: string;
+  blockNumber: string;
+  data: string;
+  value?: any;
+  topics: string[];
+  transactionHash: string;
+};
+function filterTransfers(matches: Log[], transfers: Log[]): any[] {
+  if (matches.length > 1)
+    throw new Error("MATCHES DONT CORRESPOND TO TRANSFERS");
+  let amount: BigNumber = BigNumber.from(0);
+  let erc20Transfer: Log;
 
-function filterTransfers(
-  matches: any,
-  transfers: any,
-  payment: Payment
-): any[] {
-  if (matches.length > 1) {
-    console.log("MATCHES DONT CORRESPOND TO TRANSFERS");
-    return;
-  }
-  let max = transfers[0].value;
-  transfers.map((t: any) => (max = t.value > max ? t.value : max));
-  const erc20Transfer = transfers.find((t: any) => t.value == max);
-  payment = {
-    address: erc20Transfer.address,
-    amount: BigNumber.from(erc20Transfer.data)
-  };
+  transfers.map((t: Log) => {
+    if (t.data == "0x") return;
+    const newValue: BigNumber = BigNumber.from(t.data);
+    if (newValue.gt(amount)) {
+      amount = newValue;
+      erc20Transfer = t;
+    }
+  });
+
   const nonErc20Transfers = transfers.filter(
-    (t: any) => t.address != payment.address
+    (t: Log) => t.address != erc20Transfer.address
   );
-  return [nonErc20Transfers, payment];
-}
 
+  return [nonErc20Transfers, { address: erc20Transfer.address, amount }];
+}
 function addTradeToDatas(
-  transfer: any,
+  transfer: Log,
   payment: Payment,
   datas: MatchData[]
 ): void {
@@ -60,7 +67,6 @@ function addTradeToDatas(
   )
     datas.push(newEntry);
 }
-
 export async function fetchMatchData(
   events: Array<Event>
 ): Promise<MatchData[]> {
@@ -79,23 +85,26 @@ export async function fetchMatchData(
   topics.map((topic: any, i: number) => {
     let payment: Payment = { address: "0x", amount: BigNumber.from(0) };
 
-    let transfers = topic.logs.filter(
-      (log: any) =>
+    let transfers: Log[] = topic.logs.filter(
+      (log: Log) =>
         log.topics[0] == consts.transferTopic &&
         log.topics[1] != consts.nullAddress
     );
-    const matches = topic.logs.filter(
-      (log: any) => log.topics[0] == consts.matchTopic
+    const matches: Log[] = topic.logs.filter(
+      (log: Log) => log.topics[0] == consts.matchTopic
     );
 
-    if (matches.length != transfers.length) {
-      [transfers, payment] = filterTransfers(matches, transfers, payment);
+    if (matches.length != transfers.length && transfers.length > 0) {
+      [transfers, payment] = filterTransfers(matches, transfers);
     }
 
-    transfers.map((transfer: any) => {
-      if (transactions[i].value != BigNumber.from(0)) {
-        payment = { address: consts.gasToken, amount: transactions[i].value };
-      } else if ((payment.address = "0x")) {
+    transfers.map((transfer: Log) => {
+      if (!transactions[i].value.eq(BigNumber.from(0))) {
+        payment = {
+          address: consts.gasToken,
+          amount: transactions[i].value.div(matches.length)
+        };
+      } else if (payment.address == "0x") {
         console.log("PAYMENT HAS NOT RESOLVED");
         return;
       }

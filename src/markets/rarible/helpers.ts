@@ -1,6 +1,9 @@
 import consts from "./constants.json";
-import { Event, ethers, BigNumber } from "ethers";
+import { Event, BigNumber } from "ethers";
+import { Provider } from "@ethersproject/abstract-provider";
 require("dotenv").config();
+
+const unknownPayment: Payment = { address: "0x", amount: BigNumber.from(0) };
 
 export type MatchData = {
   transactionHash: string;
@@ -31,6 +34,7 @@ function filterTransfers(matches: Log[], transfers: Log[]): any[] {
 
   transfers.map((t: Log) => {
     if (t.data == "0x") return;
+    if (t.topics[0] != consts.transferTopic) return;
     const newValue: BigNumber = BigNumber.from(t.data);
     if (newValue.gt(amount)) {
       amount = newValue;
@@ -38,25 +42,37 @@ function filterTransfers(matches: Log[], transfers: Log[]): any[] {
     }
   });
 
-  const nonErc20Transfers = transfers.filter(
-    (t: Log) => t.address != erc20Transfer.address
-  );
-
-  return [nonErc20Transfers, { address: erc20Transfer.address, amount }];
+  if (erc20Transfer == null) return [transfers, unknownPayment];
+  return [
+    transfers.filter((t: Log) => t.address != erc20Transfer.address),
+    { address: erc20Transfer.address, amount }
+  ];
 }
 function addTradeToDatas(
   transfer: Log,
   payment: Payment,
   datas: MatchData[]
 ): void {
-  const newEntry = {
-    transactionHash: transfer.transactionHash,
-    buyer: `0x${transfer.topics[2].substring(26, 66)}`,
-    contractAddress: transfer.address,
-    payment,
-    seller: `0x${transfer.topics[1].substring(26, 66)}`,
-    tokenID: parseInt(transfer.topics[3], 16).toString()
-  };
+  let newEntry: MatchData = undefined;
+  if (transfer.topics[0] == consts.transferTopic)
+    newEntry = {
+      transactionHash: transfer.transactionHash,
+      buyer: `0x${transfer.topics[2].substring(26, 66)}`,
+      contractAddress: transfer.address,
+      payment,
+      seller: `0x${transfer.topics[1].substring(26, 66)}`,
+      tokenID: parseInt(transfer.topics[3], 16).toString()
+    };
+  if (transfer.topics[0] == consts.transferSingleTopic)
+    newEntry = {
+      transactionHash: transfer.transactionHash,
+      buyer: `0x${transfer.topics[3].substring(26, 66)}`,
+      contractAddress: transfer.address,
+      payment,
+      seller: `0x${transfer.topics[2].substring(26, 66)}`,
+      tokenID: parseInt(transfer.data.substring(2, 66), 16).toString()
+    };
+
   if (
     datas.find(
       (d) =>
@@ -68,30 +84,34 @@ function addTradeToDatas(
     datas.push(newEntry);
 }
 export async function fetchMatchData(
-  events: Array<Event>
+  events: Array<Event>,
+  provider: Provider
 ): Promise<MatchData[]> {
-  const provider = new ethers.providers.StaticJsonRpcProvider(
-    process.env.ETHEREUM_RPC
-  );
-
   const datas: MatchData[] = [];
   const topics = await Promise.all(
-    events.map((e: Event) => e.getTransactionReceipt())
+    events.map((e: Event) => provider.getTransactionReceipt(e.transactionHash))
   );
   const transactions = await Promise.all(
     events.map((e: Event) => provider.getTransaction(e.transactionHash))
   );
 
   topics.map((topic: any, i: number) => {
-    let payment: Payment = { address: "0x", amount: BigNumber.from(0) };
+    let payment: Payment = unknownPayment;
+    let transfers: Log[] = [
+      ...topic.logs.filter(
+        (log: Log) =>
+          consts.transferTopic == log.topics[0] &&
+          log.topics[1] != consts.nullAddress
+      ),
+      ...topic.logs.filter(
+        (log: Log) =>
+          consts.transferSingleTopic == log.topics[0] &&
+          log.topics[2] != consts.nullAddress
+      )
+    ];
 
-    let transfers: Log[] = topic.logs.filter(
-      (log: Log) =>
-        log.topics[0] == consts.transferTopic &&
-        log.topics[1] != consts.nullAddress
-    );
-    const matches: Log[] = topic.logs.filter(
-      (log: Log) => log.topics[0] == consts.matchTopic
+    const matches: Log[] = topic.logs.filter((log: Log) =>
+      [consts.matchTopic].includes(log.topics[0])
     );
 
     if (matches.length != transfers.length && transfers.length > 0) {

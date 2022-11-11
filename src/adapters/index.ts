@@ -15,6 +15,7 @@ const adapters: string[] = [
   "opensea",
   "looksrare",
   "blur",
+  "rarible",
   "random-earth",
   "magic-eden",
   "immutablex",

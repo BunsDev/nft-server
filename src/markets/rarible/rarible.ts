@@ -132,14 +132,14 @@ export default class RaribleProvider
           range: toBlock - fromBlock
         });
 
-        // if (retryQuery) {
-        //   LOGGER.warn(`Retrying query`, {
-        //     fromBlock,
-        //     toBlock,
-        //     range: toBlock - fromBlock,
-        //     retryCount
-        //   });
-        // }
+        if (retryQuery) {
+          LOGGER.warn(`Retrying query`, {
+            fromBlock,
+            toBlock,
+            range: toBlock - fromBlock,
+            retryCount
+          });
+        }
 
         try {
           const queryFilterStart = performance.now();
@@ -154,20 +154,20 @@ export default class RaribleProvider
             )
           ).filter((e) => !e.removed);
           const queryFilterEnd = performance.now();
-          // this.MetricsReporter.submit(
-          //   `rarible.${chain}.contract_queryFilter.blockRange`,
-          //   toBlock - fromBlock
-          // );
-          // this.MetricsReporter.submit(
-          //   `rarible.${chain}.contract_queryFilter.latency`,
-          //   queryFilterEnd - queryFilterStart
-          // );
+          this.MetricsReporter.submit(
+            `rarible.${chain}.contract_queryFilter.blockRange`,
+            toBlock - fromBlock
+          );
+          this.MetricsReporter.submit(
+            `rarible.${chain}.contract_queryFilter.latency`,
+            queryFilterEnd - queryFilterStart
+          );
 
-          // LOGGER.debug(
-          //   `Found ${events.length} events between ${fromBlock} to ${toBlock}`
-          // );
+          LOGGER.debug(
+            `Found ${events.length} events between ${fromBlock} to ${toBlock}`
+          );
 
-          // LOGGER.debug("Rarible Events", { fromBlock, toBlock, events });
+          LOGGER.debug("Rarible Events", { fromBlock, toBlock, events });
 
           if (events.length) {
             this.matchDatas = await fetchMatchData(
@@ -209,30 +209,30 @@ export default class RaribleProvider
               receipts[event.transactionHash].meta.push(...parsed);
             }
 
-            // for (let i = 0; i < Object.keys(this.shapeCount).length; i += 25) {
-            //   const updateItems = Object.keys(this.shapeCount)
-            //     .slice(i, i + 25)
-            //     .reduce((items, shape) => {
-            //       items.push({
-            //         Key: {
-            //           PK: "raribleShape",
-            //           SK: shape
-            //         },
-            //         UpdateExpression: `ADD #count :count SET #tx = :tx`,
-            //         ExpressionAttributeNames: {
-            //           "#count": "count",
-            //           "#tx": "tx"
-            //         },
-            //         ExpressionAttributeValues: {
-            //           ":count": this.shapeCount[shape],
-            //           ":tx": this.shapeTx[shape]
-            //         }
-            //       });
-            //       this.shapeCount[shape] = 0;
-            //       return items;
-            //     }, []);
-            //   await dynamodb.transactWrite({ updateItems });
-            // }
+            for (let i = 0; i < Object.keys(this.shapeCount).length; i += 25) {
+              const updateItems = Object.keys(this.shapeCount)
+                .slice(i, i + 25)
+                .reduce((items, shape) => {
+                  items.push({
+                    Key: {
+                      PK: "raribleShape",
+                      SK: shape
+                    },
+                    UpdateExpression: `ADD #count :count SET #tx = :tx`,
+                    ExpressionAttributeNames: {
+                      "#count": "count",
+                      "#tx": "tx"
+                    },
+                    ExpressionAttributeValues: {
+                      ":count": this.shapeCount[shape],
+                      ":tx": this.shapeTx[shape]
+                    }
+                  });
+                  this.shapeCount[shape] = 0;
+                  return items;
+                }, []);
+              await dynamodb.transactWrite({ updateItems });
+            }
 
             yield {
               blocks,

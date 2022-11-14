@@ -37,8 +37,8 @@ export class Contract {
     return dynamodb.delete({
       Key: {
         PK: `contracts#${chain}`,
-        SK: address
-      }
+        SK: address,
+      },
     });
   }
 }

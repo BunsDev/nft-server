@@ -158,11 +158,11 @@ async function runSales(provider: AdapterProvider): Promise<void> {
         hashes,
         emptySales: !sales.length ? "true" : "false"
       });
-      // dynamodb.put({
-      //   PK: "failedSales",
-      //   SK: `${providerName}#${Date.now()}`,
-      //   blockRange
-      // });
+      dynamodb.put({
+        PK: "failedSales",
+        SK: `${providerName}#${Date.now()}`,
+        blockRange
+      });
     }
 
     blockRange?.endBlock &&
@@ -226,8 +226,3 @@ if (!process.argv[2] && !process.env.RUN_CRON_NAME) {
 }
 
 export default RaribleAdapter;
-async function main() {
-  let a = RaribleAdapter;
-  return;
-} // ts-node src/adapters/rarible.ts
-main();

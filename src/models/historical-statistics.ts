@@ -112,7 +112,7 @@ export class HistoricalStatistics {
             {
               Key: {
                 PK: `collection#${slug}`,
-                SK: "overview"
+                SK: "overview",
               },
               UpdateExpression: `
                 SET fromSales = :fromSales,
@@ -121,13 +121,13 @@ export class HistoricalStatistics {
               ExpressionAttributeValues: {
                 ":fromSales": true,
                 ":totalVolume": totalVolume,
-                ":totalVolumeUSD": totalVolumeUSD
-              }
+                ":totalVolumeUSD": totalVolumeUSD,
+              },
             },
             {
               Key: {
                 PK: `collection#${slug}`,
-                SK: `chain#${chain}`
+                SK: `chain#${chain}`,
               },
               UpdateExpression: `
                 SET fromSales = :fromSales,
@@ -136,13 +136,13 @@ export class HistoricalStatistics {
               ExpressionAttributeValues: {
                 ":fromSales": true,
                 ":totalVolume": totalVolume,
-                ":totalVolumeUSD": totalVolumeUSD
-              }
+                ":totalVolumeUSD": totalVolumeUSD,
+              },
             },
             {
               Key: {
                 PK: `collection#${slug}`,
-                SK: `marketplace#${marketplace}`
+                SK: `marketplace#${marketplace}`,
               },
               UpdateExpression: `
                 SET fromSales = :fromSales,
@@ -151,10 +151,10 @@ export class HistoricalStatistics {
               ExpressionAttributeValues: {
                 ":fromSales": true,
                 ":totalVolume": totalVolume,
-                ":totalVolumeUSD": totalVolumeUSD
-              }
-            }
-          ]
+                ":totalVolumeUSD": totalVolumeUSD,
+              },
+            },
+          ],
         });
 
         result.fromSales.result = true;

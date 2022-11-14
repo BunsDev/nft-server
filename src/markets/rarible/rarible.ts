@@ -296,6 +296,7 @@ export default class RaribleProvider
       const parsed = this.parseLog(event, chain);
 
       meta.push({
+        bundleSale: matchData.quantity > 1,
         buyer: matchData.buyer,
         contract: "rarible",
         contractAddress: matchData.contractAddress,
@@ -307,7 +308,7 @@ export default class RaribleProvider
         seller: matchData.seller,
         tokenID: matchData.tokenID,
         blockNumber: event.blockNumber,
-        count: parsed.decodedData.newRightFill,
+        count: matchData.quantity,
         data: resultToObject(parsed.decodedData)
       });
     }

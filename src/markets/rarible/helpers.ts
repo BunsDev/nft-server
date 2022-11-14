@@ -12,6 +12,7 @@ export type MatchData = {
   contractAddress: string;
   tokenID: string;
   payment: Payment;
+  quantity: number;
 };
 type Payment = {
   address: string;
@@ -51,7 +52,8 @@ function filterTransfers(matches: Log[], transfers: Log[]): any[] {
 function addTradeToDatas(
   transfer: Log,
   payment: Payment,
-  datas: MatchData[]
+  datas: MatchData[],
+  quantity: number
 ): void {
   let newEntry: MatchData = undefined;
   if (transfer.topics[0] == consts.transferTopic)
@@ -61,7 +63,8 @@ function addTradeToDatas(
       contractAddress: transfer.address,
       payment,
       seller: `0x${transfer.topics[1].substring(26, 66)}`,
-      tokenID: parseInt(transfer.topics[3], 16).toString()
+      tokenID: parseInt(transfer.topics[3], 16).toString(),
+      quantity
     };
   if (transfer.topics[0] == consts.transferSingleTopic)
     newEntry = {
@@ -70,17 +73,11 @@ function addTradeToDatas(
       contractAddress: transfer.address,
       payment,
       seller: `0x${transfer.topics[2].substring(26, 66)}`,
-      tokenID: parseInt(transfer.data.substring(2, 66), 16).toString()
+      tokenID: parseInt(transfer.data.substring(2, 66), 16).toString(),
+      quantity
     };
 
-  if (
-    datas.find(
-      (d) =>
-        d.transactionHash == newEntry.transactionHash &&
-        d.tokenID == newEntry.tokenID &&
-        d.contractAddress == newEntry.contractAddress
-    ) == null
-  )
+  if (datas.find((d) => d.transactionHash == newEntry.transactionHash) == null)
     datas.push(newEntry);
 }
 export async function fetchMatchData(
@@ -122,13 +119,13 @@ export async function fetchMatchData(
       if (!transactions[i].value.eq(BigNumber.from(0))) {
         payment = {
           address: consts.gasToken,
-          amount: transactions[i].value.div(matches.length)
+          amount: transactions[i].value
         };
       } else if (payment.address == "0x") {
-        console.log("PAYMENT HAS NOT RESOLVED");
+        console.error("PAYMENT HAS NOT RESOLVED");
         return;
       }
-      addTradeToDatas(transfer, payment, datas);
+      addTradeToDatas(transfer, payment, datas, matches.length);
     });
   });
 

@@ -10,7 +10,7 @@ export type MatchData = {
   buyer: string;
   seller: string;
   contractAddress: string;
-  tokenID: string;
+  tokenIDs: string[];
   payment: Payment;
   quantity: number;
 };
@@ -63,7 +63,7 @@ function addTradeToDatas(
       contractAddress: transfer.address,
       payment,
       seller: `0x${transfer.topics[1].substring(26, 66)}`,
-      tokenID: parseInt(transfer.topics[3], 16).toString(),
+      tokenIDs: [parseInt(transfer.topics[3], 16).toString()],
       quantity
     };
   if (transfer.topics[0] == consts.transferSingleTopic)
@@ -73,12 +73,18 @@ function addTradeToDatas(
       contractAddress: transfer.address,
       payment,
       seller: `0x${transfer.topics[2].substring(26, 66)}`,
-      tokenID: parseInt(transfer.data.substring(2, 66), 16).toString(),
+      tokenIDs: [parseInt(transfer.data.substring(2, 66), 16).toString()],
       quantity
     };
 
-  if (datas.find((d) => d.transactionHash == newEntry.transactionHash) == null)
+  const swapsInThisBundle = datas.find(
+    (d) => d.transactionHash == newEntry.transactionHash
+  );
+  if (swapsInThisBundle == null) {
     datas.push(newEntry);
+  } else if (!swapsInThisBundle.tokenIDs.includes(newEntry.tokenIDs[0])) {
+    swapsInThisBundle.tokenIDs.push(...newEntry.tokenIDs);
+  }
 }
 export async function fetchMatchData(
   events: Array<Event>,

@@ -294,6 +294,8 @@ export default class RaribleProvider
       );
 
       const parsed = this.parseLog(event, chain);
+      let data = resultToObject(parsed.decodedData);
+      if (matchData.quantity > 1) data.tokenIDs = matchData.tokenIDs;
 
       meta.push({
         bundleSale: matchData.quantity > 1,
@@ -306,10 +308,10 @@ export default class RaribleProvider
         payment: matchData.payment,
         price: parsed.decodedData.newLeftFill,
         seller: matchData.seller,
-        tokenID: matchData.tokenID,
+        tokenID: matchData.quantity > 1 ? null : matchData.tokenIDs[0],
         blockNumber: event.blockNumber,
         count: matchData.quantity,
-        data: resultToObject(parsed.decodedData)
+        data
       });
     }
     return meta;

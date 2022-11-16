@@ -24,6 +24,7 @@ const adapters: string[] = [
   "paintswap",
   "defi-kingdoms",
   "nftkey",
+  "rarible"
 ];
 
 const autoStartAdapters: Array<string> = [

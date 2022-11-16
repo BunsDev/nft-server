@@ -41,6 +41,7 @@ export enum Marketplace {
   PaintSwap = "paintswap",
   DefiKingdoms = "defi-kingdoms",
   NFTKEY = "nftkey",
+  X2y2 = "x2y2"
 }
 
 export const MarketplaceReverseLookup = new Map<

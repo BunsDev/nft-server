@@ -139,10 +139,30 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
       ],
     },
   },
+  [Marketplace.X2y2]: {
+    chains: {
+      [Blockchain.Ethereum]: [
+        {
+          enabled: true,
+          cluster: false,
+          providerName: "x2y2",
+          deployBlock: 14139341,
+          contractAddress: "0x74312363e45DCaBA76c59ec49a7Aa8A65a67EeD3",
+          saleEventName: "0xbe75518f",
+          saleTopic:
+            "0x3cbb63f144840e5b1b0a38a7c19211d2e89de4d7c5faf8b2d3c1776c302d1d33",
+          deploymentEventName: "OwnershipTransferred",
+          abi: `[{"inputs": [{ "internalType": "address", "name": "newOwner", "type": "address" }], "name": "transferOwnership", "outputs": [], "stateMutability": "nonpayable", "type": "function"}]`,
+          erc20Tokens: [],
+        },
+      ],
+    },
+  },
 };
 
 export const OpenSea = markets[Marketplace.Opensea];
 export const LooksRare = markets[Marketplace.LooksRare];
 export const Blur = markets[Marketplace.Blur];
+export const X2y2 = markets[Marketplace.X2y2];
 
 export default markets;

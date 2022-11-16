@@ -58,6 +58,7 @@ export const MARKETPLACE_CHAINS: Record<Marketplace, Blockchain[]> = {
     Blockchain.Avalanche,
     Blockchain.Ethereum,
   ],
+  [Marketplace.X2y2]: [Blockchain.Ethereum]
 };
 
 export const CHAIN_MARKETPLACES: Record<Blockchain, Marketplace[]> = {

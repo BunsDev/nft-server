@@ -41,9 +41,9 @@ configureLoggerDefaults({
   debug: false
 });
 
-const LOGGER = getLogger("X2Y2_ADAPTER", {
-  datadog: !!process.env.DATADOG_API_KEY
-});
+// const LOGGER = getLogger("X2Y2_ADAPTER", {
+//   datadog: !!process.env.DATADOG_API_KEY
+// });
 
 async function runSales(provider: AdapterProvider): Promise<void> {
   const { data: collections } = await Collection.getSorted({
@@ -56,7 +56,7 @@ async function runSales(provider: AdapterProvider): Promise<void> {
     return m;
   }, {});
 
-  LOGGER.info("Fetching sales for X2y2 collections:", collections.length);
+  // LOGGER.info("Fetching sales for X2y2 collections:", collections.length);
 
   const itSales = provider.fetchSales();
   // eslint-disable-next-line prefer-const
@@ -72,15 +72,15 @@ async function runSales(provider: AdapterProvider): Promise<void> {
       providerName,
       adapterRunName
     } = (await nextSales).value as ChainEvents;
-    LOGGER.info(`Got ${events.length} sales`);
+    // LOGGER.info(`Got ${events.length} sales`);
 
     if (!events.length) {
-      AdapterState.updateSalesLastSyncedBlockNumber(
-        Marketplace.X2y2,
-        blockRange.endBlock,
-        chain,
-        adapterRunName ?? providerName
-      );
+      // AdapterState.updateSalesLastSyncedBlockNumber(
+      //   Marketplace.X2y2,
+      //   blockRange.endBlock,
+      //   chain,
+      //   adapterRunName ?? providerName
+      // );
       nextSales = itSales.next();
       continue;
     }
@@ -89,27 +89,27 @@ async function runSales(provider: AdapterProvider): Promise<void> {
 
     for (const [hash, receiptWithMeta] of Object.entries(receipts)) {
       const { meta: metas, receipt } = receiptWithMeta;
-      if (!metas.length) {
-        LOGGER.info(`Skipping ${receipt.transactionHash}`);
-        continue;
-      }
+      // if (!metas.length) {
+      //   LOGGER.info(`Skipping ${receipt.transactionHash}`);
+      //   continue;
+      // }
       for (const meta of metas) {
-        if (!meta) {
-          LOGGER.error(`Skipping meta`, { tx: receipt.transactionHash });
-          continue;
-        }
+        // if (!meta) {
+        //   LOGGER.error(`Skipping meta`, { tx: receipt.transactionHash });
+        //   continue;
+        // }
         const { contractAddress, price, eventSignatures, data, payment } = meta;
         const formattedPrice = ethers.utils.formatUnits(
           restoreBigNumber(payment.amount),
           "ether"
         );
-        if (!contractAddress) {
-          LOGGER.debug(`Missing contract address. Skipping sale.`, {
-            hash,
-            metas
-          });
-          continue;
-        }
+        // if (!contractAddress) {
+        //   LOGGER.debug(`Missing contract address. Skipping sale.`, {
+        //     hash,
+        //     metas
+        //   });
+        //   continue;
+        // }
         sales.push({
           txnHash: receipt.transactionHash,
           timestamp: (
@@ -154,20 +154,20 @@ async function runSales(provider: AdapterProvider): Promise<void> {
         hashes[sale.paymentTokenAddress].push(sale.txnHash);
         return hashes;
       }, {} as Record<string, Array<string>>);
-      LOGGER.error(`Sale error`, { error: e, sales, hashes });
-      dynamodb.put({
-        PK: "failedSales",
-        SK: `${providerName}#${Date.now()}`,
-        blockRange
-      });
+      // LOGGER.error(`Sale error`, { error: e, sales, hashes });
+      // dynamodb.put({
+      //   PK: "failedSales",
+      //   SK: `${providerName}#${Date.now()}`,
+      //   blockRange
+      // });
     }
 
-    AdapterState.updateSalesLastSyncedBlockNumber(
-      Marketplace.X2y2,
-      blockRange.endBlock,
-      chain,
-      adapterRunName ?? providerName
-    );
+    // AdapterState.updateSalesLastSyncedBlockNumber(
+    //   Marketplace.X2y2,
+    //   blockRange.endBlock,
+    //   chain,
+    //   adapterRunName ?? providerName
+    // );
     nextSales = itSales.next();
   }
 }
@@ -179,20 +179,20 @@ async function run(provider: AdapterProvider): Promise<void> {
       await sleep(parseInt(process.env.ADAPTER_SLEEP_PERIOD) || 3.6e3);
     }
   } catch (e) {
-    await handleError(e, "looksrare-adapter");
+    await handleError(e, "x2y2-adapter");
   }
 }
 
 const X2y2Adapter: DataAdapter = { run };
 
 function spawnProviderChild(p: AdapterProviderConfig, run = 0) {
-  LOGGER.info(`Spawn Provider Child`, { provider: p, run });
+  // LOGGER.info(`Spawn Provider Child`, { provider: p, run });
   const providerChild = fork(__filename, [
     "provider-child",
     p.chainConfig.providerName
   ]);
   providerChild.on("exit", (code) => {
-    LOGGER.alert(`Provider Child Exit`, { provider: p, code, run });
+    // LOGGER.alert(`Provider Child Exit`, { provider: p, code, run });
     if (run < 3) {
       spawnProviderChild(p, run + 1);
     }
@@ -202,20 +202,26 @@ function spawnProviderChild(p: AdapterProviderConfig, run = 0) {
 if (!process.argv[2]) {
   X2y2Provider.build(X2y2MarketConfig).forEach((p) => spawnProviderChild(p));
 } else if (process.argv[2] === "provider-child") {
-  const LRProviders = X2y2Provider.build(X2y2MarketConfig);
+  const X2Providers = X2y2Provider.build(X2y2MarketConfig);
   const providerName = process.argv[3];
-  const config = LRProviders.find(
+  const config = X2Providers.find(
     (p) => p.chainConfig.providerName === providerName
   );
   const provider = config.instantiate();
   if (cluster.isWorker && config.chainConfig.cluster) {
-    ClusterWorker.create(process.env.WORKER_UUID, `LOOKSRARE`, provider);
+    ClusterWorker.create(process.env.WORKER_UUID, `X2Y2`, provider);
   } else if (isPrimary()) {
     if (config.chainConfig.cluster) {
-      ClusterManager.create(`LOOKSRARE`, provider);
+      ClusterManager.create(`X2Y2`, provider);
     }
     X2y2Adapter.run(provider);
   }
 }
 
 export default X2y2Adapter;
+async function main() {
+  let b = X2y2Adapter;
+  return;
+}
+main();
+// ts-node src/adapters/x2y2.ts

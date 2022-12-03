@@ -139,6 +139,26 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
       ]
     }
   },
+  [Marketplace.Rarible]: {
+    chains: {
+      [Blockchain.Ethereum]: [
+        {
+          enabled: true,
+          cluster: false,
+          providerName: "rarible",
+          deployBlock: 12617828,
+          contractAddress: "0x9757F2d2b135150BBeb65308D4a91804107cd8D6",
+          saleEventName: "Match",
+          saleTopic:
+            "0x956cd63ee4cdcd81fda5f0ec7c6c36dceda99e1b412f4a650a5d26055dc3c450",
+          deploymentEventName: "OwnershipTransferred",
+          abi: `[{"anonymous":false,"inputs":[{"indexed":false,"internalType":"bytes32","name":"hash","type":"bytes32"}],"name":"Cancel","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"bytes32","name":"leftHash","type":"bytes32"},{"indexed":false,"internalType":"bytes32","name":"rightHash","type":"bytes32"},{"indexed":false,"internalType":"uint256","name":"newLeftFill","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"newRightFill","type":"uint256"}],"name":"Match","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes4","name":"assetType","type":"bytes4"},{"indexed":false,"internalType":"address","name":"matcher","type":"address"}],"name":"MatcherChange","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"previousOwner","type":"address"},{"indexed":true,"internalType":"address","name":"newOwner","type":"address"}],"name":"OwnershipTransferred","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"bytes4","name":"assetType","type":"bytes4"},{"indexed":false,"internalType":"address","name":"proxy","type":"address"}],"name":"ProxyChange","type":"event"}]`,
+          erc20Tokens: []
+        }
+      ]
+    }
+  }
+};
   [Marketplace.X2y2]: {
     chains: {
       [Blockchain.Ethereum]: [
@@ -168,6 +188,7 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
 export const OpenSea = markets[Marketplace.Opensea];
 export const LooksRare = markets[Marketplace.LooksRare];
 export const Blur = markets[Marketplace.Blur];
+export const Rarible = markets[Marketplace.Rarible];
 export const X2y2 = markets[Marketplace.X2y2];
 
 export default markets;

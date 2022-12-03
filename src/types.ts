@@ -43,6 +43,7 @@ export enum Marketplace {
   NFTKEY = "nftkey",
   Blur = "blur",
   Rarible = "rarible",
+  X2y2 = "x2y2"
 }
 
 export const MarketplaceReverseLookup = new Map<

@@ -1,6 +1,6 @@
 import { Blockchain, HumanABI, Marketplace, MoralisChain } from "./types";
 
-require('dotenv').config()
+require("dotenv").config();
 
 export const ONE_HOUR = 1;
 
@@ -18,11 +18,11 @@ export const DEFAULT_TOKEN_ADDRESSES: Record<Blockchain, string> = {
   [Blockchain.Cardano]: "addr11111111111111111111111111111111",
   [Blockchain.Avalanche]: "avax:0x0000000000000000000000000000000000000000",
   [Blockchain.Fantom]: "ftm:0x0000000000000000000000000000000000000000",
-  [Blockchain.Harmony]: "one:0x0000000000000000000000000000000000000000",
+  [Blockchain.Harmony]: "one:0x0000000000000000000000000000000000000000"
 };
 
 export const WRAPPED_BASE_TOKENS: Partial<Record<Blockchain, string>> = {
-  [Blockchain.Ethereum]: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+  [Blockchain.Ethereum]: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 };
 
 export const MORALIS_CHAINS: Record<Blockchain, MoralisChain> = {
@@ -35,7 +35,7 @@ export const MORALIS_CHAINS: Record<Blockchain, MoralisChain> = {
   [Blockchain.Harmony]: MoralisChain.None,
   [Blockchain.Avalanche]: MoralisChain.None,
   [Blockchain.Ethereum]: MoralisChain.Ethereum,
-  [Blockchain.BSC]: MoralisChain.BSC,
+  [Blockchain.BSC]: MoralisChain.BSC
 };
 
 export const MARKETPLACE_CHAINS: Record<Marketplace, Blockchain[]> = {
@@ -56,10 +56,10 @@ export const MARKETPLACE_CHAINS: Record<Marketplace, Blockchain[]> = {
     Blockchain.BSC,
     Blockchain.Harmony,
     Blockchain.Avalanche,
-    Blockchain.Ethereum,
+    Blockchain.Ethereum
   ],
   [Marketplace.Blur]: [Blockchain.Ethereum],
-  [Marketplace.Rarible]: [Blockchain.Ethereum]
+  [Marketplace.Rarible]: [Blockchain.Ethereum],
   [Marketplace.X2y2]: [Blockchain.Ethereum]
 };
 
@@ -76,9 +76,9 @@ export const CHAIN_MARKETPLACES: Record<Blockchain, Marketplace[]> = {
     Marketplace.Opensea,
     Marketplace.NFTKEY,
     Marketplace.LooksRare,
-    Marketplace.Blur,
+    Marketplace.Blur
   ],
-  [Blockchain.BSC]: [Marketplace.PancakeSwap, Marketplace.NFTKEY],
+  [Blockchain.BSC]: [Marketplace.PancakeSwap, Marketplace.NFTKEY]
 };
 
 export const CHAIN_IDS: Record<number, Blockchain> = {
@@ -86,14 +86,14 @@ export const CHAIN_IDS: Record<number, Blockchain> = {
   56: Blockchain.BSC,
   43114: Blockchain.Avalanche,
   250: Blockchain.Fantom,
-  1666600000: Blockchain.Harmony,
+  1666600000: Blockchain.Harmony
 };
 
 export const CHAIN_RPCS: Partial<Record<Blockchain, string>> = {
   [Blockchain.Avalanche]: process.env.AVALANCHE_RPC,
   [Blockchain.Harmony]: process.env.HARMONY_RPC,
   [Blockchain.Fantom]: process.env.FANTOM_RPC,
-  [Blockchain.BSC]: process.env.BSC_RPC,
+  [Blockchain.BSC]: process.env.BSC_RPC
 };
 
 export const COINGECKO_IDS: Record<Blockchain, any> = {
@@ -101,69 +101,69 @@ export const COINGECKO_IDS: Record<Blockchain, any> = {
     geckoId: "ethereum",
     llamaId: "ethereum",
     platform: "ethereum",
-    symbol: "eth",
+    symbol: "eth"
   },
   [Blockchain.ImmutableX]: {
     geckoId: "ethereum",
     llamaId: "",
     platform: "ethereum",
-    symbol: "eth",
+    symbol: "eth"
   },
   [Blockchain.Arbitrum]: {
     geckoId: "ethereum",
     llamaId: "",
     platform: "arbitrum-one",
-    symbol: "eth",
+    symbol: "eth"
   },
   [Blockchain.Solana]: {
     geckoId: "solana",
     llamaId: "",
     platform: "solana",
-    symbol: "sol",
+    symbol: "sol"
   },
   [Blockchain.BSC]: {
     geckoId: "binancecoin",
     llamaId: "bsc",
     platform: "binance-smart-chain",
-    symbol: "bnb",
+    symbol: "bnb"
   },
   [Blockchain.Terra]: {
     geckoId: "terra-luna",
     llamaId: "",
     platform: "terra",
-    symbol: "luna",
+    symbol: "luna"
   },
   [Blockchain.Cardano]: {
     geckoId: "cardano",
     llamaId: "",
     platform: "cardano",
-    symbol: "ada",
+    symbol: "ada"
   },
   [Blockchain.Avalanche]: {
     geckoId: "avalanche-2",
     llamaId: "avax",
     platform: "avalanche",
-    symbol: "avax",
+    symbol: "avax"
   },
   [Blockchain.Fantom]: {
     geckoId: "fantom",
     llamaId: "fantom",
     platform: "fantom",
-    symbol: "ftm",
+    symbol: "ftm"
   },
   [Blockchain.Harmony]: {
     geckoId: "harmony",
     llamaId: "harmony",
     platform: "harmony-shard-0",
-    symbol: "one",
-  },
+    symbol: "one"
+  }
 };
 
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC721/IERC721.sol
 export const IERC721Standard: HumanABI = [
   "event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId)",
   "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
-  "event ApprovalForAll(address indexed owner, address indexed operator, bool approved)",
+  "event ApprovalForAll(address indexed owner, address indexed operator, bool approved)"
 ];
 
 export const IERC721Events: Map<string, string> = IERC721Standard.reduce(
@@ -176,7 +176,7 @@ export const IERC1155Standard: HumanABI = [
   "event TransferSingle(address indexed operator, address indexed from, address indexed to, uint256 id, uint256 value)",
   "event TransferBatch(address indexed operator, address indexed from, address indexed to, uint256[] ids, uint256[] values)",
   "event ApprovalForAll(address indexed account, address indexed operator, bool approved)",
-  "event URI(string value, uint256 indexed id)",
+  "event URI(string value, uint256 indexed id)"
 ];
 
 export const IERC1155Events: Map<string, string> = IERC1155Standard.reduce(
@@ -186,12 +186,12 @@ export const IERC1155Events: Map<string, string> = IERC1155Standard.reduce(
 
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol
 export const OwnableStandard: HumanABI = [
-  "event OwnershipTransferred(address indexed previousOwner, address indexed newOwner)",
+  "event OwnershipTransferred(address indexed previousOwner, address indexed newOwner)"
 ];
 
 export const IERC20Standard: HumanABI = [
   "event Transfer(address indexed from, address indexed to, uint256 value)",
-  "event Approval(address indexed owner, address indexed spender, uint256 value)",
+  "event Approval(address indexed owner, address indexed spender, uint256 value)"
 ];
 
 function reduceToEvents(record: Map<string, string>, abi: string) {

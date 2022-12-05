@@ -41,7 +41,6 @@ export enum Marketplace {
   PaintSwap = "paintswap",
   DefiKingdoms = "defi-kingdoms",
   NFTKEY = "nftkey",
-  Blur = "blur",
   Rarible = "rarible",
   X2y2 = "x2y2"
 }

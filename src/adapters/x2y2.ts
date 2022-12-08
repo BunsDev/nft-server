@@ -35,15 +35,15 @@ type AdapterProviderConfig = {
   chainConfig: MarketChainConfig;
 };
 
-// configureLoggerDefaults({
-//   error: false,
-//   info: false,
-//   debug: false
-// });
+configureLoggerDefaults({
+  error: false,
+  info: false,
+  debug: false
+});
 
-// const LOGGER = getLogger("X2Y2_ADAPTER", {
-//   datadog: !!process.env.DATADOG_API_KEY
-// });
+const LOGGER = getLogger("X2Y2_ADAPTER", {
+  datadog: !!process.env.DATADOG_API_KEY
+});
 
 async function runSales(provider: AdapterProvider): Promise<void> {
   const { data: collections } = await Collection.getSorted({
@@ -56,7 +56,7 @@ async function runSales(provider: AdapterProvider): Promise<void> {
     return m;
   }, {});
 
-  // LOGGER.info("Fetching sales for X2y2 collections:", collections.length);
+  LOGGER.info("Fetching sales for X2y2 collections:", collections.length);
 
   const itSales = provider.fetchSales();
   // eslint-disable-next-line prefer-const
@@ -72,15 +72,15 @@ async function runSales(provider: AdapterProvider): Promise<void> {
       providerName,
       adapterRunName
     } = (await nextSales).value as ChainEvents;
-    // LOGGER.info(`Got ${events.length} sales`);
+    LOGGER.info(`Got ${events.length} sales`);
 
     if (!events.length) {
-      // AdapterState.updateSalesLastSyncedBlockNumber(
-      //   Marketplace.X2y2,
-      //   blockRange.endBlock,
-      //   chain,
-      //   adapterRunName ?? providerName
-      // );
+      AdapterState.updateSalesLastSyncedBlockNumber(
+        Marketplace.X2y2,
+        blockRange.endBlock,
+        chain,
+        adapterRunName ?? providerName
+      );
       nextSales = itSales.next();
       continue;
     }
@@ -90,27 +90,27 @@ async function runSales(provider: AdapterProvider): Promise<void> {
     for (const [hash, receiptWithMeta] of Object.entries(receipts)) {
       const { meta: metas, receipt } = receiptWithMeta;
 
-      // if (!metas.length) {
-      //   LOGGER.info(`Skipping ${receipt.transactionHash}`);
-      //   continue;
-      // }
+      if (!metas.length) {
+        LOGGER.info(`Skipping ${receipt.transactionHash}`);
+        continue;
+      }
       const meta = metas[0];
-      // if (!meta) {
-      //   LOGGER.error(`Skipping meta`, { tx: receipt.transactionHash });
-      //   continue;
-      // }
+      if (!meta) {
+        LOGGER.error(`Skipping meta`, { tx: receipt.transactionHash });
+        continue;
+      }
       const { contractAddress, price, eventSignatures, data, payment } = meta;
       const formattedPrice = ethers.utils.formatUnits(
         restoreBigNumber(payment.amount),
         "ether"
       );
-      // if (!contractAddress) {
-      //   LOGGER.debug(`Missing contract address. Skipping sale.`, {
-      //     hash,
-      //     metas
-      //   });
-      //   continue;
-      // }
+      if (!contractAddress) {
+        LOGGER.debug(`Missing contract address. Skipping sale.`, {
+          hash,
+          metas
+        });
+        continue;
+      }
       sales.push({
         txnHash: receipt.transactionHash,
         timestamp: (blockMap[receipt.blockNumber].timestamp * 1000).toString(),
@@ -152,20 +152,20 @@ async function runSales(provider: AdapterProvider): Promise<void> {
         hashes[sale.paymentTokenAddress].push(sale.txnHash);
         return hashes;
       }, {} as Record<string, Array<string>>);
-      // LOGGER.error(`Sale error`, { error: e, sales, hashes });
-      // dynamodb.put({
-      //   PK: "failedSales",
-      //   SK: `${providerName}#${Date.now()}`,
-      //   blockRange
-      // });
+      LOGGER.error(`Sale error`, { error: e, sales, hashes });
+      dynamodb.put({
+        PK: "failedSales",
+        SK: `${providerName}#${Date.now()}`,
+        blockRange
+      });
     }
 
-    // AdapterState.updateSalesLastSyncedBlockNumber(
-    //   Marketplace.X2y2,
-    //   blockRange.endBlock,
-    //   chain,
-    //   adapterRunName ?? providerName
-    // );
+    AdapterState.updateSalesLastSyncedBlockNumber(
+      Marketplace.X2y2,
+      blockRange.endBlock,
+      chain,
+      adapterRunName ?? providerName
+    );
     nextSales = itSales.next();
   }
 }
@@ -184,13 +184,13 @@ async function run(provider: AdapterProvider): Promise<void> {
 const X2y2Adapter: DataAdapter = { run };
 
 function spawnProviderChild(p: AdapterProviderConfig, run = 0) {
-  // LOGGER.info(`Spawn Provider Child`, { provider: p, run });
+  LOGGER.info(`Spawn Provider Child`, { provider: p, run });
   const providerChild = fork(__filename, [
     "provider-child",
     p.chainConfig.providerName
   ]);
   providerChild.on("exit", (code) => {
-    // LOGGER.alert(`Provider Child Exit`, { provider: p, code, run });
+    LOGGER.alert(`Provider Child Exit`, { provider: p, code, run });
     if (run < 3) {
       spawnProviderChild(p, run + 1);
     }
@@ -217,9 +217,3 @@ if (!process.argv[2]) {
 }
 
 export default X2y2Adapter;
-async function main() {
-  let b = X2y2Adapter;
-  return;
-}
-main();
-// ts-node src/adapters/x2y2.ts

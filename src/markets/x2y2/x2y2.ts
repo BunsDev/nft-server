@@ -10,25 +10,43 @@ import {
 import { Blockchain, Marketplace } from "../../types";
 import { AdapterState } from "../../models";
 import { Block } from "@ethersproject/providers";
-import {
-  MetricsReporter as DefaultMetricsReporter,
-  customMetricsReporter
-} from "../../utils/metrics";
+import { customMetricsReporter } from "../../utils/metrics";
 import { ClusterWorker, IClusterProvider } from "../../utils/cluster";
-import dynamodb from "../../utils/dynamodb";
 import BaseProvider from "../BaseProvider";
 
-const GET_BLOCK_PARALLELISM: number = process.env.GET_BLOCK_PARALLELISM
-  ? parseInt(process.env.GET_BLOCK_PARALLELISM)
-  : 5;
 const MATURE_BLOCK_AGE = process.env.MATURE_BLOCK_AGE
   ? parseInt(process.env.MATURE_BLOCK_AGE)
   : 250;
-const BLOCK_RANGE = 50;
+const BLOCK_RANGE = process.env.EVENT_BLOCK_RANGE
+  ? parseInt(process.env.EVENT_BLOCK_RANGE)
+  : 250;
 
-// const LOGGER = getLogger("X2Y2_PROVIDER", {
-//   datadog: !!process.env.DATADOG_API_KEY
-// });
+const LOGGER = getLogger("X2Y2_PROVIDER", {
+  datadog: !!process.env.DATADOG_API_KEY
+});
+type Payment = {
+  address: string;
+  amount: BigNumber;
+};
+type Log = {
+  address: string;
+  blockHash: string;
+  blockNumber: string;
+  data: string;
+  value?: any;
+  topics: string[];
+  transactionHash: string;
+};
+const unknownPayment: Payment = { address: "0x", amount: BigNumber.from(0) };
+const consts: any = {
+  transferTopic:
+    "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+  matchTopic:
+    "0xe2c49856b032c255ae7e325d18109bc4e22a2804e2e49a017ec0f59f19cd447b",
+  gasToken: "0x0000000000000000000000000000000000000000",
+  nullAddress:
+    "0x0000000000000000000000000000000000000000000000000000000000000000"
+};
 export type MatchData = {
   transactionHash: string;
   buyer: string;
@@ -39,8 +57,7 @@ export type MatchData = {
 function addTradeToDatas(
   transfer: Log,
   payment: Payment,
-  datas: MatchData[],
-  quantity: number
+  datas: MatchData[]
 ): void {
   let newEntry: MatchData = undefined;
   if (transfer.topics[0] == consts.transferTopic)
@@ -61,7 +78,6 @@ function addTradeToDatas(
     swapsInThisBundle.tokenIDs.push(...newEntry.tokenIDs);
   }
 }
-type TokenEventMetadataMap = Record<string, EventMetadata>;
 
 export default class X2y2Provider
   extends BaseProvider
@@ -154,7 +170,7 @@ export default class X2y2Provider
           console.error("PAYMENT HAS NOT RESOLVED");
           return;
         }
-        addTradeToDatas(transfer, payment, datas, matches.length);
+        addTradeToDatas(transfer, payment, datas);
       });
     });
 
@@ -179,12 +195,12 @@ export default class X2y2Provider
       );
       if (deployBlock && Number.isInteger(deployBlock)) {
         if (lastSyncedBlockNumber < deployBlock) {
-          // AdapterState.updateSalesLastSyncedBlockNumber(
-          //   this.market,
-          //   deployBlock,
-          //   chain,
-          //   adapterRunName ?? providerName
-          // );
+          AdapterState.updateSalesLastSyncedBlockNumber(
+            this.market,
+            deployBlock,
+            chain,
+            adapterRunName ?? providerName
+          );
         }
         lastSyncedBlockNumber = Math.max(deployBlock, lastSyncedBlockNumber);
       }
@@ -199,11 +215,11 @@ export default class X2y2Provider
           );
 
       if (lastMatureBlock - lastSyncedBlockNumber <= MATURE_BLOCK_AGE) {
-        // LOGGER.error(`Not enough mature blocks to scan.`, {
-        //   currentBlock,
-        //   lastMatureBlock,
-        //   lastSyncedBlockNumber
-        // });
+        LOGGER.error(`Not enough mature blocks to scan.`, {
+          currentBlock,
+          lastMatureBlock,
+          lastSyncedBlockNumber
+        });
         return;
       }
 
@@ -221,23 +237,23 @@ export default class X2y2Provider
             ? currentBlock
             : fromBlock + BLOCK_RANGE;
 
-        // LOGGER.debug("Searching blocks: ", {
-        //   fromBlock,
-        //   toBlock,
-        //   range: toBlock - fromBlock,
-        // });
+        LOGGER.debug("Searching blocks: ", {
+          fromBlock,
+          toBlock,
+          range: toBlock - fromBlock
+        });
 
-        // if (retryQuery) {
-        //   LOGGER.warn(`Retrying query`, {
-        //     fromBlock,
-        //     toBlock,
-        //     range: toBlock - fromBlock,
-        //     retryCount,
-        //   });
-        // }
+        if (retryQuery) {
+          LOGGER.warn(`Retrying query`, {
+            fromBlock,
+            toBlock,
+            range: toBlock - fromBlock,
+            retryCount
+          });
+        }
 
         try {
-          //const queryFilterStart = performance.now();
+          const queryFilterStart = performance.now();
           const events: Array<Event> = (
             await contract.queryFilter(
               {
@@ -248,21 +264,21 @@ export default class X2y2Provider
               toBlock
             )
           ).filter((e) => !e.removed);
-          //const queryFilterEnd = performance.now();
-          // this.MetricsReporter.submit(
-          //   `opensea_seaport.${chain}.contract_queryFilter.blockRange`,
-          //   toBlock - fromBlock
-          // );
-          // this.MetricsReporter.submit(
-          //   `opensea_seaport.${chain}.contract_queryFilter.latency`,
-          //   queryFilterEnd - queryFilterStart
-          // );
+          const queryFilterEnd = performance.now();
+          this.MetricsReporter.submit(
+            `opensea_seaport.${chain}.contract_queryFilter.blockRange`,
+            toBlock - fromBlock
+          );
+          this.MetricsReporter.submit(
+            `opensea_seaport.${chain}.contract_queryFilter.latency`,
+            queryFilterEnd - queryFilterStart
+          );
 
-          // LOGGER.debug(
-          //   `Found ${events.length} events between ${fromBlock} to ${toBlock}`
-          // );
+          LOGGER.debug(
+            `Found ${events.length} events between ${fromBlock} to ${toBlock}`
+          );
 
-          // LOGGER.debug("Seaport Events", { fromBlock, toBlock, events });
+          LOGGER.debug("Seaport Events", { fromBlock, toBlock, events });
 
           if (events.length) {
             this.retrieveBlocks(fromBlock, toBlock, chain);
@@ -329,20 +345,20 @@ export default class X2y2Provider
           retryCount = 0;
           retryQuery = false;
         } catch (e) {
-          // LOGGER.error(`Query error`, {
-          //   error: /quorum/.test(e.message) ? `Quorum error` : e.message,
-          //   reason: e.reason,
-          //   fromBlock,
-          //   toBlock,
-          //   stack: e.stack.substr(0, 500)
-          // });
+          LOGGER.error(`Query error`, {
+            error: /quorum/.test(e.message) ? `Quorum error` : e.message,
+            reason: e.reason,
+            fromBlock,
+            toBlock,
+            stack: e.stack.substr(0, 500)
+          });
           if (retryCount < 3) {
             // try again
             retryCount++;
             i -= i - (BLOCK_RANGE + 1) < 0 ? i : BLOCK_RANGE + 1;
             retryQuery = true;
           } else if (retryCount > 3) {
-            // LOGGER.error(`Not able to recover from query errors`);
+            LOGGER.error(`Not able to recover from query errors`);
             throw new Error(`Not able to recover from query errors`);
           }
         }
@@ -359,23 +375,11 @@ export default class X2y2Provider
     const meta: Array<EventMetadata> = [];
     for (const event of events) {
       const parsed = this.parseLog(event, chain);
-      const { currency, amount, to } = parsed.decodedData;
+      const { to } = parsed.decodedData;
       const matchData = matchDatas.find(
         (t) => t.transactionHash == event.transactionHash
       );
       const count = matchData.tokenIDs.length;
-      // LOGGER.debug(`X2y2 Event`, {
-      //   saleEvent,
-      //   buyer,
-      //   seller,
-      //   collection,
-      //   currency,
-      //   tokenId,
-      //   amount,
-      //   price,
-      //   parsed,
-      //   event
-      // });
 
       meta.push({
         buyer: matchData.buyer,
@@ -401,33 +405,3 @@ export default class X2y2Provider
     return meta;
   }
 }
-type Transfer = {
-  transactionHash: string;
-  buyer: string;
-  contractAddress: string;
-  tokenId: string;
-  count: number;
-};
-type Payment = {
-  address: string;
-  amount: BigNumber;
-};
-type Log = {
-  address: string;
-  blockHash: string;
-  blockNumber: string;
-  data: string;
-  value?: any;
-  topics: string[];
-  transactionHash: string;
-};
-const unknownPayment: Payment = { address: "0x", amount: BigNumber.from(0) };
-const consts: any = {
-  transferTopic:
-    "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
-  matchTopic:
-    "0xe2c49856b032c255ae7e325d18109bc4e22a2804e2e49a017ec0f59f19cd447b",
-  gasToken: "0x0000000000000000000000000000000000000000",
-  nullAddress:
-    "0x0000000000000000000000000000000000000000000000000000000000000000"
-}; // ts-node src/adapters/x2y2.ts

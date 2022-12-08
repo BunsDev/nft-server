@@ -157,8 +157,7 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
         }
       ]
     }
-  }
-};
+  },
   [Marketplace.X2y2]: {
     chains: {
       [Blockchain.Ethereum]: [

@@ -34,7 +34,7 @@ export type MatchData = {
   buyer: string;
   contractAddress: string;
   tokenIDs: string[];
-  quantity: number;
+  payment: Payment;
 };
 function addTradeToDatas(
   transfer: Log,
@@ -49,15 +49,7 @@ function addTradeToDatas(
       buyer: `0x${transfer.topics[2].substring(26, 66)}`,
       contractAddress: transfer.address,
       tokenIDs: [parseInt(transfer.topics[3], 16).toString()],
-      quantity
-    };
-  if (transfer.topics[0] == consts.transferSingleTopic)
-    newEntry = {
-      transactionHash: transfer.transactionHash,
-      buyer: `0x${transfer.topics[3].substring(26, 66)}`,
-      contractAddress: transfer.address,
-      tokenIDs: [parseInt(transfer.data.substring(2, 66), 16).toString()],
-      quantity
+      payment
     };
 
   const swapsInThisBundle = datas.find(
@@ -90,6 +82,30 @@ export default class X2y2Provider
     args: unknown[]
   ): Promise<unknown> {
     return Promise.reject(new Error("Not implemented"));
+  }
+
+  private filterTransfers(matches: any, transfers: any, topic: any): any[] {
+    if (matches.length > 1)
+      throw new Error("MATCHES DONT CORRESPOND TO TRANSFERS");
+    let amount: BigNumber = BigNumber.from(0);
+    let erc20Transfer: Log;
+    let transfersProper: Log[] = [];
+
+    transfers.map((t: Log) => {
+      if (!t.topics[2].includes(topic.from.substring(2).toLowerCase())) return;
+      if (t.topics[0] != consts.transferTopic) return;
+      transfersProper.push(t);
+      try {
+        const newValue: BigNumber = BigNumber.from(t.data);
+        if (newValue.gt(amount)) {
+          amount = newValue;
+          erc20Transfer = t;
+        }
+      } catch (e) {}
+    });
+
+    if (erc20Transfer == null) return [transfersProper, unknownPayment];
+    return [transfersProper, { address: erc20Transfer.address, amount }];
   }
 
   private async fetchMatchData(
@@ -125,9 +141,9 @@ export default class X2y2Provider
         [consts.matchTopic].includes(log.topics[0])
       );
 
-      if (matches.length != transfers.length && transfers.length > 0) {
-        console.log("bang");
-      }
+      if (matches.length != transfers.length && transfers.length > 0)
+        [transfers, payment] = this.filterTransfers(matches, transfers, topic);
+
       transfers.map((transfer: Log) => {
         if (!transactions[i].value.eq(BigNumber.from(0))) {
           payment = {
@@ -221,7 +237,7 @@ export default class X2y2Provider
         // }
 
         try {
-          const queryFilterStart = performance.now();
+          //const queryFilterStart = performance.now();
           const events: Array<Event> = (
             await contract.queryFilter(
               {
@@ -232,7 +248,7 @@ export default class X2y2Provider
               toBlock
             )
           ).filter((e) => !e.removed);
-          const queryFilterEnd = performance.now();
+          //const queryFilterEnd = performance.now();
           // this.MetricsReporter.submit(
           //   `opensea_seaport.${chain}.contract_queryFilter.blockRange`,
           //   toBlock - fromBlock
@@ -341,17 +357,13 @@ export default class X2y2Provider
   ): Array<EventMetadata> {
     const { providerName } = this.config.chains[chain];
     const meta: Array<EventMetadata> = [];
-    events = events.filter(
-      (e) =>
-        e.transactionHash ==
-        "0x4684edf0c9a7b615a15bf8d57f10f3937cf7f6f699cbcb53f201fcaa955bcf17"
-    );
     for (const event of events) {
       const parsed = this.parseLog(event, chain);
       const { currency, amount, to } = parsed.decodedData;
       const matchData = matchDatas.find(
-        (t) => (t.transactionHash = event.transactionHash)
+        (t) => t.transactionHash == event.transactionHash
       );
+      const count = matchData.tokenIDs.length;
       // LOGGER.debug(`X2y2 Event`, {
       //   saleEvent,
       //   buyer,
@@ -370,23 +382,20 @@ export default class X2y2Provider
         seller: to,
         contractAddress: matchData.contractAddress,
         eventSignatures: [event.eventSignature],
-        payment: {
-          address: currency,
-          amount
-        },
-        price: amount,
-        tokenID: matchData.quantity > 1 ? null : matchData.tokenIDs[0],
-        count: matchData.quantity, // 1
+        payment: matchData.payment,
+        price: matchData.payment.amount,
+        tokenID: count > 1 ? null : matchData.tokenIDs[0],
+        count,
         data: {
           parsed,
           event,
-          tokenIDs: matchData.quantity > 1 ? matchData.tokenIDs : null
+          tokenIDs: count > 1 ? matchData.tokenIDs : null
         },
         hash: event.transactionHash,
         contract: providerName,
         logIndex: event.logIndex,
         blockNumber: event.blockNumber,
-        bundleSale: matchData.quantity > 1
+        bundleSale: count > 1
       });
     }
     return meta;

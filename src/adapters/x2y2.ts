@@ -35,11 +35,11 @@ type AdapterProviderConfig = {
   chainConfig: MarketChainConfig;
 };
 
-configureLoggerDefaults({
-  error: false,
-  info: false,
-  debug: false
-});
+// configureLoggerDefaults({
+//   error: false,
+//   info: false,
+//   debug: false
+// });
 
 // const LOGGER = getLogger("X2Y2_ADAPTER", {
 //   datadog: !!process.env.DATADOG_API_KEY
@@ -89,51 +89,49 @@ async function runSales(provider: AdapterProvider): Promise<void> {
 
     for (const [hash, receiptWithMeta] of Object.entries(receipts)) {
       const { meta: metas, receipt } = receiptWithMeta;
+
       // if (!metas.length) {
       //   LOGGER.info(`Skipping ${receipt.transactionHash}`);
       //   continue;
       // }
-      for (const meta of metas) {
-        // if (!meta) {
-        //   LOGGER.error(`Skipping meta`, { tx: receipt.transactionHash });
-        //   continue;
-        // }
-        const { contractAddress, price, eventSignatures, data, payment } = meta;
-        const formattedPrice = ethers.utils.formatUnits(
-          restoreBigNumber(payment.amount),
-          "ether"
-        );
-        // if (!contractAddress) {
-        //   LOGGER.debug(`Missing contract address. Skipping sale.`, {
-        //     hash,
-        //     metas
-        //   });
-        //   continue;
-        // }
-        sales.push({
-          txnHash: receipt.transactionHash,
-          timestamp: (
-            blockMap[receipt.blockNumber].timestamp * 1000
-          ).toString(),
-          paymentTokenAddress: payment.address,
-          contractAddress,
-          price: parseFloat(formattedPrice),
-          priceBase: null,
-          priceUSD: null,
-          sellerAddress: meta.seller,
-          buyerAddress: meta.buyer,
-          marketplace: Marketplace.X2y2,
-          chain,
-          metadata: { payment, data },
-          count: meta.count,
-          contract: meta.contract,
-          logIndex: meta.logIndex,
-          bundleSale: meta.bundleSale,
-          hasCollection: !!collectionMap[contractAddress],
-          blockNumber: receipt.blockNumber,
-          tokenID: meta.tokenID
-        });
-      }
+      const meta = metas[0];
+      // if (!meta) {
+      //   LOGGER.error(`Skipping meta`, { tx: receipt.transactionHash });
+      //   continue;
+      // }
+      const { contractAddress, price, eventSignatures, data, payment } = meta;
+      const formattedPrice = ethers.utils.formatUnits(
+        restoreBigNumber(payment.amount),
+        "ether"
+      );
+      // if (!contractAddress) {
+      //   LOGGER.debug(`Missing contract address. Skipping sale.`, {
+      //     hash,
+      //     metas
+      //   });
+      //   continue;
+      // }
+      sales.push({
+        txnHash: receipt.transactionHash,
+        timestamp: (blockMap[receipt.blockNumber].timestamp * 1000).toString(),
+        paymentTokenAddress: payment.address,
+        contractAddress,
+        price: parseFloat(formattedPrice),
+        priceBase: null,
+        priceUSD: null,
+        sellerAddress: meta.seller,
+        buyerAddress: meta.buyer,
+        marketplace: Marketplace.X2y2,
+        chain,
+        metadata: { payment, data },
+        count: meta.count,
+        contract: meta.contract,
+        logIndex: meta.logIndex,
+        bundleSale: meta.bundleSale,
+        hasCollection: !!collectionMap[contractAddress],
+        blockNumber: receipt.blockNumber,
+        tokenID: meta.tokenID
+      });
     }
 
     try {

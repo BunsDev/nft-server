@@ -17,13 +17,15 @@ import BaseProvider from "../BaseProvider";
 const MATURE_BLOCK_AGE = process.env.MATURE_BLOCK_AGE
   ? parseInt(process.env.MATURE_BLOCK_AGE)
   : 250;
-const BLOCK_RANGE = process.env.EVENT_BLOCK_RANGE
-  ? parseInt(process.env.EVENT_BLOCK_RANGE)
-  : 250;
+const BLOCK_RANGE = 50;
 
 const LOGGER = getLogger("X2Y2_PROVIDER", {
   datadog: !!process.env.DATADOG_API_KEY
 });
+type PaymentComplex = {
+  payment: Payment;
+  buyer: string | undefined;
+};
 type Payment = {
   address: string;
   amount: BigNumber;
@@ -37,7 +39,10 @@ type Log = {
   topics: string[];
   transactionHash: string;
 };
-const unknownPayment: Payment = { address: "0x", amount: BigNumber.from(0) };
+const unknownPayment: PaymentComplex = {
+  buyer: undefined,
+  payment: { address: "0x", amount: BigNumber.from(0) }
+};
 const consts: any = {
   transferTopic:
     "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
@@ -56,17 +61,21 @@ export type MatchData = {
 };
 function addTradeToDatas(
   transfer: Log,
-  payment: Payment,
+  payment: PaymentComplex,
   datas: MatchData[]
 ): void {
   let newEntry: MatchData = undefined;
+  let a = isNaN(parseInt(transfer.topics[3], 16));
+  if (a) {
+    console.log("hi");
+  }
   if (transfer.topics[0] == consts.transferTopic)
     newEntry = {
       transactionHash: transfer.transactionHash,
-      buyer: `0x${transfer.topics[2].substring(26, 66)}`,
+      buyer: payment.buyer ?? `0x${transfer.topics[2].substring(26, 66)}`,
       contractAddress: transfer.address,
       tokenIDs: [parseInt(transfer.topics[3], 16).toString()],
-      payment
+      payment: payment.payment
     };
 
   const swapsInThisBundle = datas.find(
@@ -101,27 +110,48 @@ export default class X2y2Provider
   }
 
   private filterTransfers(matches: any, transfers: any, topic: any): any[] {
-    if (matches.length > 1)
-      throw new Error("MATCHES DONT CORRESPOND TO TRANSFERS");
     let amount: BigNumber = BigNumber.from(0);
     let erc20Transfer: Log;
     let transfersProper: Log[] = [];
 
     transfers.map((t: Log) => {
-      if (!t.topics[2].includes(topic.from.substring(2).toLowerCase())) return;
-      if (t.topics[0] != consts.transferTopic) return;
-      transfersProper.push(t);
-      try {
-        const newValue: BigNumber = BigNumber.from(t.data);
-        if (newValue.gt(amount)) {
-          amount = newValue;
-          erc20Transfer = t;
-        }
-      } catch (e) {}
+      transfers;
+      if (t.topics.length != 4) {
+        try {
+          const newValue: BigNumber = BigNumber.from(t.data);
+          if (newValue.gt(amount)) {
+            amount = newValue;
+            erc20Transfer = t;
+          }
+        } catch (e) {}
+      }
     });
 
+    transfers.map((t: Log) => {
+      transfers;
+      const recipient =
+        amount == BigNumber.from(0)
+          ? topic.from.substring(2).toLowerCase()
+          : erc20Transfer.topics[1].substring(26, 66);
+      if (
+        !isNaN(parseInt(t.topics[3], 16)) &&
+        t.topics[2].includes(recipient)
+      ) {
+        transfersProper.push(t);
+      }
+    });
+
+    if (transfersProper.length > 1) {
+      console.log("hi");
+    }
     if (erc20Transfer == null) return [transfersProper, unknownPayment];
-    return [transfersProper, { address: erc20Transfer.address, amount }];
+    return [
+      transfersProper,
+      {
+        buyer: `0x${erc20Transfer.topics[1].substring(26, 66)}`,
+        payment: { address: erc20Transfer.address, amount }
+      }
+    ];
   }
 
   private async fetchMatchData(
@@ -139,7 +169,7 @@ export default class X2y2Provider
       events.map((e: Event) => provider.getTransaction(e.transactionHash))
     );
     topics.map((topic: any, i: number) => {
-      let payment: Payment = unknownPayment;
+      let payment: PaymentComplex = unknownPayment;
       let transfers: Log[] = [
         ...topic.logs.filter(
           (log: Log) =>
@@ -163,10 +193,13 @@ export default class X2y2Provider
       transfers.map((transfer: Log) => {
         if (!transactions[i].value.eq(BigNumber.from(0))) {
           payment = {
-            address: consts.gasToken,
-            amount: transactions[i].value
+            buyer: undefined,
+            payment: {
+              address: consts.gasToken,
+              amount: transactions[i].value
+            }
           };
-        } else if (payment.address == "0x") {
+        } else if (payment.payment.address == "0x") {
           console.error("PAYMENT HAS NOT RESOLVED");
           return;
         }
@@ -186,13 +219,14 @@ export default class X2y2Provider
         chain
       ].getCurrentBlockNumber();
       const lastMatureBlock = currentBlock - MATURE_BLOCK_AGE;
-      let { lastSyncedBlockNumber } = await AdapterState.getSalesAdapterState(
-        this.market,
-        chain,
-        true,
-        deployBlock,
-        adapterRunName ?? providerName
-      );
+      // let { lastSyncedBlockNumber } = await AdapterState.getSalesAdapterState(
+      //   this.market,
+      //   chain,
+      //   true,
+      //   deployBlock,
+      //   adapterRunName ?? providerName
+      // );
+      let lastSyncedBlockNumber = deployBlock;
       if (deployBlock && Number.isInteger(deployBlock)) {
         if (lastSyncedBlockNumber < deployBlock) {
           AdapterState.updateSalesLastSyncedBlockNumber(
@@ -215,11 +249,11 @@ export default class X2y2Provider
           );
 
       if (lastMatureBlock - lastSyncedBlockNumber <= MATURE_BLOCK_AGE) {
-        LOGGER.error(`Not enough mature blocks to scan.`, {
-          currentBlock,
-          lastMatureBlock,
-          lastSyncedBlockNumber
-        });
+        // LOGGER.error(`Not enough mature blocks to scan.`, {
+        //   currentBlock,
+        //   lastMatureBlock,
+        //   lastSyncedBlockNumber
+        // });
         return;
       }
 
@@ -232,6 +266,7 @@ export default class X2y2Provider
         i += BLOCK_RANGE + 1
       ) {
         const fromBlock = lastSyncedBlockNumber + i;
+        console.log(fromBlock);
         const toBlock =
           fromBlock + BLOCK_RANGE > currentBlock
             ? currentBlock
@@ -244,16 +279,16 @@ export default class X2y2Provider
         });
 
         if (retryQuery) {
-          LOGGER.warn(`Retrying query`, {
-            fromBlock,
-            toBlock,
-            range: toBlock - fromBlock,
-            retryCount
-          });
+          // LOGGER.warn(`Retrying query`, {
+          //   fromBlock,
+          //   toBlock,
+          //   range: toBlock - fromBlock,
+          //   retryCount
+          // });
         }
 
         try {
-          const queryFilterStart = performance.now();
+          //const queryFilterStart = performance.now();
           const events: Array<Event> = (
             await contract.queryFilter(
               {
@@ -265,20 +300,20 @@ export default class X2y2Provider
             )
           ).filter((e) => !e.removed);
           const queryFilterEnd = performance.now();
-          this.MetricsReporter.submit(
-            `opensea_seaport.${chain}.contract_queryFilter.blockRange`,
-            toBlock - fromBlock
-          );
-          this.MetricsReporter.submit(
-            `opensea_seaport.${chain}.contract_queryFilter.latency`,
-            queryFilterEnd - queryFilterStart
-          );
+          // this.MetricsReporter.submit(
+          //   `opensea_seaport.${chain}.contract_queryFilter.blockRange`,
+          //   toBlock - fromBlock
+          // );
+          // this.MetricsReporter.submit(
+          //   `opensea_seaport.${chain}.contract_queryFilter.latency`,
+          //   queryFilterEnd - queryFilterStart
+          // );
 
-          LOGGER.debug(
-            `Found ${events.length} events between ${fromBlock} to ${toBlock}`
-          );
+          // LOGGER.debug(
+          //   `Found ${events.length} events between ${fromBlock} to ${toBlock}`
+          // );
 
-          LOGGER.debug("Seaport Events", { fromBlock, toBlock, events });
+          // LOGGER.debug("Seaport Events", { fromBlock, toBlock, events });
 
           if (events.length) {
             this.retrieveBlocks(fromBlock, toBlock, chain);

@@ -25,12 +25,14 @@ const adapters: string[] = [
   "paintswap",
   "defi-kingdoms",
   "nftkey",
+  "x2y2"
 ];
 
 const autoStartAdapters: Array<string> = [
   "opensea",
   "looksrare",
   "blur",
+  "x2y2"
   // "moralis",
   // "pancakeswap",
   // "random-earth",
@@ -45,7 +47,7 @@ const autoStartAdapters: Array<string> = [
 ];
 
 const LOGGER = getLogger("ADAPTER_STARTUP", {
-  datadog: !!process.env.DATADOG_API_KEY,
+  datadog: !!process.env.DATADOG_API_KEY
 });
 
 const spawnChildProcess = (adapterName: string, attempt = 1) => {

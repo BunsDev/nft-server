@@ -14,7 +14,7 @@ import {
   MarketConfig,
   X2y2 as X2y2MarketConfig
 } from "../markets";
-import { X2y2Provider } from "../markets/X2y2Provider";
+import { X2y2Provider } from "../markets/x2y2Provider";
 import { ethers } from "ethers";
 import { ChainEvents } from "../markets/BaseMarketOnChainProvider";
 import { getLogger, configureLoggerDefaults } from "../utils/logger";

@@ -41,10 +41,6 @@ type Log = {
   topics: string[];
   transactionHash: string;
 };
-const unknownPayment: PaymentComplex = {
-  buyer: undefined,
-  payment: { address: "0x", amount: BigNumber.from(0) }
-};
 const consts: any = {
   transferTopic:
     "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
@@ -52,7 +48,11 @@ const consts: any = {
     "0xe2c49856b032c255ae7e325d18109bc4e22a2804e2e49a017ec0f59f19cd447b",
   gasToken: "0x0000000000000000000000000000000000000000",
   nullAddress:
-    "0x0000000000000000000000000000000000000000000000000000000000000000"
+    "0x0000000000000000000000000000000000000000000000000000000000000000",
+  unknownPayment: {
+    buyer: undefined,
+    payment: { address: "0x", amount: BigNumber.from(0) }
+  }
 };
 export type MatchData = {
   transactionHash: string;
@@ -167,7 +167,7 @@ export default class X2y2Provider
       events.map((e: Event) => provider.getTransaction(e.transactionHash))
     );
     topics.map((topic: any, i: number) => {
-      let payment: PaymentComplex = unknownPayment;
+      let payment: PaymentComplex = consts.unknownPayment;
       let transfers: Log[] = [
         ...topic.logs.filter(
           (log: Log) =>
@@ -256,7 +256,6 @@ export default class X2y2Provider
         i += BLOCK_RANGE + 1
       ) {
         const fromBlock = lastSyncedBlockNumber + i;
-        console.log(fromBlock);
         const toBlock =
           fromBlock + BLOCK_RANGE > currentBlock
             ? currentBlock

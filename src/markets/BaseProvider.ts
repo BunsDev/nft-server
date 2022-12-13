@@ -13,7 +13,7 @@ import {
   EventLogType,
   LogType,
   ChainEvents,
-  ReceiptLike,
+  ReceiptLike
 } from "./BaseMarketOnChainProvider";
 import { MarketConfig } from "../markets";
 import { ChainProviders } from "../providers/OnChainProviderFactory";
@@ -22,18 +22,18 @@ import { TransactionReceipt, Log, Block } from "@ethersproject/providers";
 import {
   IERC1155Standard,
   IERC20Standard,
-  IERC721Standard,
+  IERC721Standard
 } from "../constants";
 import { ParseErrors, UnparsableLogError } from "../utils/UnparsableLogError";
 import {
   MetricsReporter as DefaultMetricsReporter,
-  MetricData,
+  MetricData
 } from "../utils/metrics";
 import { ClusterManager, ClusterWorker } from "../utils/cluster";
 import { AdapterState } from "../models";
 
 const LOGGER = getLogger("BASE_PROVIDER", {
-  datadog: !!process.env.DATADOG_API_KEY,
+  datadog: !!process.env.DATADOG_API_KEY
 });
 
 const GET_BLOCK_PARALLELISM: number = process.env.GET_BLOCK_PARALLELISM
@@ -132,7 +132,7 @@ export default abstract class BaseProvider {
     const timeHash = this.metrics.has(time) ? this.metrics.get(time) : {};
     this.metrics.set(time, {
       ...timeHash,
-      [metric]: { metric, value } as MetricData,
+      [metric]: { metric, value } as MetricData
     } as Record<string, MetricData>);
   }
 
@@ -206,7 +206,7 @@ export default abstract class BaseProvider {
         LOGGER.error(`Not enough mature blocks to scan.`, {
           currentBlock,
           lastMatureBlock,
-          lastSyncedBlockNumber,
+          lastSyncedBlockNumber
         });
         return;
       }
@@ -228,7 +228,7 @@ export default abstract class BaseProvider {
         LOGGER.debug("Searching blocks: ", {
           fromBlock,
           toBlock,
-          range: toBlock - fromBlock,
+          range: toBlock - fromBlock
         });
 
         if (retryQuery) {
@@ -236,7 +236,7 @@ export default abstract class BaseProvider {
             fromBlock,
             toBlock,
             range: toBlock - fromBlock,
-            retryCount,
+            retryCount
           });
         }
 
@@ -246,7 +246,7 @@ export default abstract class BaseProvider {
             await contract.queryFilter(
               {
                 address: contractAddress,
-                topics: filterTopics,
+                topics: filterTopics
               },
               fromBlock,
               toBlock
@@ -275,7 +275,7 @@ export default abstract class BaseProvider {
             ).reduce(
               (m: Record<string, Block>, b: Block) => ({
                 ...m,
-                [b.number.toString()]: b,
+                [b.number.toString()]: b
               }),
               {} as Record<string, Block>
             );
@@ -289,9 +289,9 @@ export default abstract class BaseProvider {
                 receipts[event.transactionHash] = {
                   receipt: {
                     blockNumber: event.blockNumber,
-                    transactionHash: event.transactionHash,
+                    transactionHash: event.transactionHash
                   } as ReceiptLike,
-                  meta: [] as Array<EventMetadata>,
+                  meta: [] as Array<EventMetadata>
                 };
               }
               receipts[event.transactionHash].meta.push(parsed);
@@ -303,11 +303,11 @@ export default abstract class BaseProvider {
               events,
               blockRange: {
                 startBlock: fromBlock,
-                endBlock: toBlock,
+                endBlock: toBlock
               },
               receipts,
               providerName,
-              adapterRunName,
+              adapterRunName
             };
           } else {
             yield {
@@ -315,10 +315,10 @@ export default abstract class BaseProvider {
               events,
               blockRange: {
                 startBlock: fromBlock,
-                endBlock: toBlock,
+                endBlock: toBlock
               },
               providerName,
-              adapterRunName,
+              adapterRunName
             };
           }
 
@@ -330,7 +330,7 @@ export default abstract class BaseProvider {
             reason: e.reason,
             fromBlock,
             toBlock,
-            stack: e.stack.substr(0, 500),
+            stack: e.stack.substr(0, 500)
           });
           if (retryCount < 3) {
             // try again
@@ -399,7 +399,7 @@ export default abstract class BaseProvider {
               LOGGER.alert(`We failed to get block ${i} after retrying`, {
                 fromBlock,
                 toBlock,
-                error: e,
+                error: e
               });
             }
             continue;
@@ -423,7 +423,7 @@ export default abstract class BaseProvider {
       [LogType.ERC721]: BaseProvider.ERC721ContractInterface,
       [LogType.ERC1155]: BaseProvider.ERC1155ContractInterface,
       [LogType.ERC20]: BaseProvider.ERC20ContractInterface,
-      [this.market]: this.contracts[chain].interface,
+      [this.market]: this.contracts[chain].interface
     };
 
     const parsed: EventLogType = {
@@ -431,7 +431,7 @@ export default abstract class BaseProvider {
       type: null,
       contract: log.address,
       topics: log.topics,
-      errors: [],
+      errors: []
     };
     const parseLogStart = performance.now();
     for (const lType of Object.keys(parsers) as LogType[] | Marketplace[]) {
@@ -450,7 +450,7 @@ export default abstract class BaseProvider {
             evtLogErr,
             name: parsed.log.name,
             data: log.data,
-            topics: log.topics,
+            topics: log.topics
           });
         }
         break;

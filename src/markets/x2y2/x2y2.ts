@@ -24,6 +24,10 @@ const BLOCK_RANGE = process.env.EVENT_BLOCK_RANGE
 const LOGGER = getLogger("X2Y2_PROVIDER", {
   datadog: !!process.env.DATADOG_API_KEY
 });
+type PaymentComplex = {
+  payment: Payment;
+  buyer: string | undefined;
+};
 type Payment = {
   address: string;
   amount: BigNumber;
@@ -37,7 +41,6 @@ type Log = {
   topics: string[];
   transactionHash: string;
 };
-const unknownPayment: Payment = { address: "0x", amount: BigNumber.from(0) };
 const consts: any = {
   transferTopic:
     "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
@@ -45,7 +48,11 @@ const consts: any = {
     "0xe2c49856b032c255ae7e325d18109bc4e22a2804e2e49a017ec0f59f19cd447b",
   gasToken: "0x0000000000000000000000000000000000000000",
   nullAddress:
-    "0x0000000000000000000000000000000000000000000000000000000000000000"
+    "0x0000000000000000000000000000000000000000000000000000000000000000",
+  unknownPayment: {
+    buyer: undefined,
+    payment: { address: "0x", amount: BigNumber.from(0) }
+  }
 };
 export type MatchData = {
   transactionHash: string;
@@ -56,17 +63,17 @@ export type MatchData = {
 };
 function addTradeToDatas(
   transfer: Log,
-  payment: Payment,
+  payment: PaymentComplex,
   datas: MatchData[]
 ): void {
   let newEntry: MatchData = undefined;
   if (transfer.topics[0] == consts.transferTopic)
     newEntry = {
       transactionHash: transfer.transactionHash,
-      buyer: `0x${transfer.topics[2].substring(26, 66)}`,
+      buyer: payment.buyer ?? `0x${transfer.topics[2].substring(26, 66)}`,
       contractAddress: transfer.address,
       tokenIDs: [parseInt(transfer.topics[3], 16).toString()],
-      payment
+      payment: payment.payment
     };
 
   const swapsInThisBundle = datas.find(
@@ -100,28 +107,49 @@ export default class X2y2Provider
     return Promise.reject(new Error("Not implemented"));
   }
 
-  private filterTransfers(matches: any, transfers: any, topic: any): any[] {
-    if (matches.length > 1)
-      throw new Error("MATCHES DONT CORRESPOND TO TRANSFERS");
+  private filterTransfers(transfers: any, topic: any, transaction: any): any[] {
     let amount: BigNumber = BigNumber.from(0);
     let erc20Transfer: Log;
     let transfersProper: Log[] = [];
 
-    transfers.map((t: Log) => {
-      if (!t.topics[2].includes(topic.from.substring(2).toLowerCase())) return;
-      if (t.topics[0] != consts.transferTopic) return;
-      transfersProper.push(t);
-      try {
-        const newValue: BigNumber = BigNumber.from(t.data);
-        if (newValue.gt(amount)) {
-          amount = newValue;
-          erc20Transfer = t;
+    if (transaction.value.eq(BigNumber.from(0))) {
+      transfers.map((t: Log) => {
+        if (t.topics.length != 4) {
+          try {
+            const newValue: BigNumber = BigNumber.from(t.data);
+            if (newValue.gt(amount)) {
+              amount = newValue;
+              erc20Transfer = t;
+            }
+          } catch {}
         }
-      } catch (e) {}
+      });
+    }
+
+    transfers.map((t: Log) => {
+      const recipient = amount.eq(BigNumber.from(0))
+        ? topic.from.substring(2).toLowerCase()
+        : erc20Transfer.topics[1].substring(26, 66);
+
+      if (!isNaN(parseInt(t.topics[3], 16)) && t.topics[2].includes(recipient))
+        transfersProper.push(t);
     });
 
-    if (erc20Transfer == null) return [transfersProper, unknownPayment];
-    return [transfersProper, { address: erc20Transfer.address, amount }];
+    if (erc20Transfer == null)
+      return [
+        transfersProper,
+        {
+          buyer: `0x${transfersProper[0].topics[2].substring(26, 66)}`,
+          payment: { address: consts.gasToken, amount: transaction.value }
+        }
+      ];
+    return [
+      transfersProper,
+      {
+        buyer: `0x${erc20Transfer.topics[1].substring(26, 66)}`,
+        payment: { address: erc20Transfer.address, amount }
+      }
+    ];
   }
 
   private async fetchMatchData(
@@ -139,7 +167,7 @@ export default class X2y2Provider
       events.map((e: Event) => provider.getTransaction(e.transactionHash))
     );
     topics.map((topic: any, i: number) => {
-      let payment: Payment = unknownPayment;
+      let payment: PaymentComplex = consts.unknownPayment;
       let transfers: Log[] = [
         ...topic.logs.filter(
           (log: Log) =>
@@ -158,20 +186,15 @@ export default class X2y2Provider
       );
 
       if (matches.length != transfers.length && transfers.length > 0)
-        [transfers, payment] = this.filterTransfers(matches, transfers, topic);
+        [transfers, payment] = this.filterTransfers(
+          transfers,
+          topic,
+          transactions[i]
+        );
 
-      transfers.map((transfer: Log) => {
-        if (!transactions[i].value.eq(BigNumber.from(0))) {
-          payment = {
-            address: consts.gasToken,
-            amount: transactions[i].value
-          };
-        } else if (payment.address == "0x") {
-          console.error("PAYMENT HAS NOT RESOLVED");
-          return;
-        }
-        addTradeToDatas(transfer, payment, datas);
-      });
+      transfers.map((transfer: Log) =>
+        addTradeToDatas(transfer, payment, datas)
+      );
     });
 
     return datas;
@@ -193,6 +216,7 @@ export default class X2y2Provider
         deployBlock,
         adapterRunName ?? providerName
       );
+
       if (deployBlock && Number.isInteger(deployBlock)) {
         if (lastSyncedBlockNumber < deployBlock) {
           AdapterState.updateSalesLastSyncedBlockNumber(

@@ -17,7 +17,9 @@ import BaseProvider from "../BaseProvider";
 const MATURE_BLOCK_AGE = process.env.MATURE_BLOCK_AGE
   ? parseInt(process.env.MATURE_BLOCK_AGE)
   : 250;
-const BLOCK_RANGE = 50;
+const BLOCK_RANGE = process.env.EVENT_BLOCK_RANGE
+  ? parseInt(process.env.EVENT_BLOCK_RANGE)
+  : 250;
 
 const LOGGER = getLogger("X2Y2_PROVIDER", {
   datadog: !!process.env.DATADOG_API_KEY
@@ -65,10 +67,6 @@ function addTradeToDatas(
   datas: MatchData[]
 ): void {
   let newEntry: MatchData = undefined;
-  let a = isNaN(parseInt(transfer.topics[3], 16));
-  if (a) {
-    console.log("hi");
-  }
   if (transfer.topics[0] == consts.transferTopic)
     newEntry = {
       transactionHash: transfer.transactionHash,
@@ -109,42 +107,42 @@ export default class X2y2Provider
     return Promise.reject(new Error("Not implemented"));
   }
 
-  private filterTransfers(matches: any, transfers: any, topic: any): any[] {
+  private filterTransfers(transfers: any, topic: any, transaction: any): any[] {
     let amount: BigNumber = BigNumber.from(0);
     let erc20Transfer: Log;
     let transfersProper: Log[] = [];
 
-    transfers.map((t: Log) => {
-      transfers;
-      if (t.topics.length != 4) {
-        try {
-          const newValue: BigNumber = BigNumber.from(t.data);
-          if (newValue.gt(amount)) {
-            amount = newValue;
-            erc20Transfer = t;
-          }
-        } catch (e) {}
-      }
-    });
-
-    transfers.map((t: Log) => {
-      transfers;
-      const recipient =
-        amount == BigNumber.from(0)
-          ? topic.from.substring(2).toLowerCase()
-          : erc20Transfer.topics[1].substring(26, 66);
-      if (
-        !isNaN(parseInt(t.topics[3], 16)) &&
-        t.topics[2].includes(recipient)
-      ) {
-        transfersProper.push(t);
-      }
-    });
-
-    if (transfersProper.length > 1) {
-      console.log("hi");
+    if (transaction.value.eq(BigNumber.from(0))) {
+      transfers.map((t: Log) => {
+        if (t.topics.length != 4) {
+          try {
+            const newValue: BigNumber = BigNumber.from(t.data);
+            if (newValue.gt(amount)) {
+              amount = newValue;
+              erc20Transfer = t;
+            }
+          } catch {}
+        }
+      });
     }
-    if (erc20Transfer == null) return [transfersProper, unknownPayment];
+
+    transfers.map((t: Log) => {
+      const recipient = amount.eq(BigNumber.from(0))
+        ? topic.from.substring(2).toLowerCase()
+        : erc20Transfer.topics[1].substring(26, 66);
+
+      if (!isNaN(parseInt(t.topics[3], 16)) && t.topics[2].includes(recipient))
+        transfersProper.push(t);
+    });
+
+    if (erc20Transfer == null)
+      return [
+        transfersProper,
+        {
+          buyer: `0x${transfersProper[0].topics[2].substring(26, 66)}`,
+          payment: { address: consts.gasToken, amount: transaction.value }
+        }
+      ];
     return [
       transfersProper,
       {
@@ -188,23 +186,15 @@ export default class X2y2Provider
       );
 
       if (matches.length != transfers.length && transfers.length > 0)
-        [transfers, payment] = this.filterTransfers(matches, transfers, topic);
+        [transfers, payment] = this.filterTransfers(
+          transfers,
+          topic,
+          transactions[i]
+        );
 
-      transfers.map((transfer: Log) => {
-        if (!transactions[i].value.eq(BigNumber.from(0))) {
-          payment = {
-            buyer: undefined,
-            payment: {
-              address: consts.gasToken,
-              amount: transactions[i].value
-            }
-          };
-        } else if (payment.payment.address == "0x") {
-          console.error("PAYMENT HAS NOT RESOLVED");
-          return;
-        }
-        addTradeToDatas(transfer, payment, datas);
-      });
+      transfers.map((transfer: Log) =>
+        addTradeToDatas(transfer, payment, datas)
+      );
     });
 
     return datas;
@@ -219,14 +209,14 @@ export default class X2y2Provider
         chain
       ].getCurrentBlockNumber();
       const lastMatureBlock = currentBlock - MATURE_BLOCK_AGE;
-      // let { lastSyncedBlockNumber } = await AdapterState.getSalesAdapterState(
-      //   this.market,
-      //   chain,
-      //   true,
-      //   deployBlock,
-      //   adapterRunName ?? providerName
-      // );
-      let lastSyncedBlockNumber = deployBlock;
+      let { lastSyncedBlockNumber } = await AdapterState.getSalesAdapterState(
+        this.market,
+        chain,
+        true,
+        deployBlock,
+        adapterRunName ?? providerName
+      );
+
       if (deployBlock && Number.isInteger(deployBlock)) {
         if (lastSyncedBlockNumber < deployBlock) {
           AdapterState.updateSalesLastSyncedBlockNumber(
@@ -249,11 +239,11 @@ export default class X2y2Provider
           );
 
       if (lastMatureBlock - lastSyncedBlockNumber <= MATURE_BLOCK_AGE) {
-        // LOGGER.error(`Not enough mature blocks to scan.`, {
-        //   currentBlock,
-        //   lastMatureBlock,
-        //   lastSyncedBlockNumber
-        // });
+        LOGGER.error(`Not enough mature blocks to scan.`, {
+          currentBlock,
+          lastMatureBlock,
+          lastSyncedBlockNumber
+        });
         return;
       }
 
@@ -279,16 +269,16 @@ export default class X2y2Provider
         });
 
         if (retryQuery) {
-          // LOGGER.warn(`Retrying query`, {
-          //   fromBlock,
-          //   toBlock,
-          //   range: toBlock - fromBlock,
-          //   retryCount
-          // });
+          LOGGER.warn(`Retrying query`, {
+            fromBlock,
+            toBlock,
+            range: toBlock - fromBlock,
+            retryCount
+          });
         }
 
         try {
-          //const queryFilterStart = performance.now();
+          const queryFilterStart = performance.now();
           const events: Array<Event> = (
             await contract.queryFilter(
               {
@@ -300,20 +290,20 @@ export default class X2y2Provider
             )
           ).filter((e) => !e.removed);
           const queryFilterEnd = performance.now();
-          // this.MetricsReporter.submit(
-          //   `opensea_seaport.${chain}.contract_queryFilter.blockRange`,
-          //   toBlock - fromBlock
-          // );
-          // this.MetricsReporter.submit(
-          //   `opensea_seaport.${chain}.contract_queryFilter.latency`,
-          //   queryFilterEnd - queryFilterStart
-          // );
+          this.MetricsReporter.submit(
+            `opensea_seaport.${chain}.contract_queryFilter.blockRange`,
+            toBlock - fromBlock
+          );
+          this.MetricsReporter.submit(
+            `opensea_seaport.${chain}.contract_queryFilter.latency`,
+            queryFilterEnd - queryFilterStart
+          );
 
-          // LOGGER.debug(
-          //   `Found ${events.length} events between ${fromBlock} to ${toBlock}`
-          // );
+          LOGGER.debug(
+            `Found ${events.length} events between ${fromBlock} to ${toBlock}`
+          );
 
-          // LOGGER.debug("Seaport Events", { fromBlock, toBlock, events });
+          LOGGER.debug("Seaport Events", { fromBlock, toBlock, events });
 
           if (events.length) {
             this.retrieveBlocks(fromBlock, toBlock, chain);

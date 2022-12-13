@@ -165,7 +165,7 @@ const markets: Partial<Record<Marketplace, MultiMarketConfig>> = {
           enabled: true,
           cluster: false,
           providerName: "x2y2",
-          deployBlock: 15979852,
+          deployBlock: 14139341,
           contractAddress: "0x74312363e45DCaBA76c59ec49a7Aa8A65a67EeD3",
           saleEventName: "EvProfit",
           saleTopic:

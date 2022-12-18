@@ -11,7 +11,10 @@ export enum Blockchain {
   Cardano = "cardano",
   Avalanche = "avalanche",
   Fantom = "fantom",
-  Harmony = "harmony"
+  Harmony = "harmony",
+  Polygon = "polygon",
+  Optimism = "optimism",
+  Avax = "avax"
 }
 
 export const BlockchainReverseLookup = new Map<

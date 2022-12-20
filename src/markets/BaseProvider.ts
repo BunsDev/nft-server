@@ -39,9 +39,6 @@ const LOGGER = getLogger("BASE_PROVIDER", {
 const GET_BLOCK_PARALLELISM: number = process.env.GET_BLOCK_PARALLELISM
   ? parseInt(process.env.GET_BLOCK_PARALLELISM)
   : 5;
-const MATURE_BLOCK_AGE = process.env.MATURE_BLOCK_AGE
-  ? parseInt(process.env.MATURE_BLOCK_AGE)
-  : 250;
 const BLOCK_RANGE = process.env.EVENT_BLOCK_RANGE
   ? parseInt(process.env.EVENT_BLOCK_RANGE)
   : 250;
@@ -165,6 +162,25 @@ export default abstract class BaseProvider {
     this.setMetric(metric, value - decr);
   }
 
+  private getBlockOffset(chain: Blockchain) {
+    switch (chain) {
+      case "polygon":
+        return 128;
+      case "arbitrum":
+      case "optimism":
+        return 20;
+      case "bsc":
+        return 16;
+      case "ethereum":
+      case undefined:
+        return 12;
+      case "avax":
+        return 10;
+      case "fantom":
+        return 5;
+    }
+  }
+
   public async *fetchSales(): AsyncGenerator<ChainEvents> {
     // eslint-disable-next-line no-unreachable-loop
     for (const chain of Object.keys(this.chains) as Blockchain[]) {
@@ -173,7 +189,7 @@ export default abstract class BaseProvider {
       const currentBlock: number = await this.chains[
         chain
       ].getCurrentBlockNumber();
-      const lastMatureBlock = currentBlock - MATURE_BLOCK_AGE;
+      const lastMatureBlock = currentBlock - this.getBlockOffset(chain);
       let { lastSyncedBlockNumber } = await AdapterState.getSalesAdapterState(
         this.market,
         chain,
@@ -202,7 +218,10 @@ export default abstract class BaseProvider {
             []
           );
 
-      if (lastMatureBlock - lastSyncedBlockNumber <= MATURE_BLOCK_AGE) {
+      if (
+        lastMatureBlock - lastSyncedBlockNumber <=
+        this.getBlockOffset(chain)
+      ) {
         LOGGER.error(`Not enough mature blocks to scan.`, {
           currentBlock,
           lastMatureBlock,

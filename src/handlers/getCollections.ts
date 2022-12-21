@@ -17,6 +17,7 @@ const handler = async (event: APIGatewayProxyEvent): Promise<IResponse> => {
       marketplace: marketplace as Marketplace,
       limit: limit || "100",
       cursor,
+      returnAll: true,
     });
     return successResponse(collectionsData, 10 * 60);
   } catch (e) {

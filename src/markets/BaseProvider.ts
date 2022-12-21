@@ -164,18 +164,19 @@ export default abstract class BaseProvider {
 
   private getBlockOffset(chain: Blockchain) {
     switch (chain) {
-      case "polygon":
-        return 128;
+      // case "polygon":
+      //   return 128;
       case "arbitrum":
-      case "optimism":
-        return 20;
+      // case "optimism":
+      //   return 20;
       case "bsc":
         return 16;
       case "ethereum":
+        return 12
       case undefined:
-        return 12;
-      case "avax":
-        return 10;
+        return 250;
+      // case "avax":
+      //   return 10;
       case "fantom":
         return 5;
     }

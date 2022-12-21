@@ -167,12 +167,12 @@ export default abstract class BaseProvider {
       // case "polygon":
       //   return 128;
       case "arbitrum":
-      // case "optimism":
-      //   return 20;
+        // case "optimism":
+        return 20;
       case "bsc":
         return 16;
       case "ethereum":
-        return 12
+        return 12;
       case undefined:
         return 250;
       // case "avax":

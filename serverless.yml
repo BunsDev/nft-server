@@ -8,7 +8,7 @@ provider:
   runtime: nodejs14.x
   memorySize: 250
   region: eu-west-2
-  stage: dev # Default to dev if no stage is specified
+  stage: prod
   tracing: # Enable X-Ray tracing (debugging)
     apiGateway: true
     lambda: true

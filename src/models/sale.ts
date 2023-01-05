@@ -93,14 +93,14 @@ export class Sale {
               }
               i.metadata = null;
             });
-            // await dynamodb.batchWrite(metadata);
+            await dynamodb.batchWrite(metadata);
           } catch (e) {
             LOGGER.alert(`Sale metadata failure`, { metadata, e });
           }
         }
-        // await dynamodb.batchWrite(items);
+        await dynamodb.batchWrite(items);
         for (const Key of deleteLegacy) {
-          // await dynamodb.delete({ Key });
+          await dynamodb.delete({ Key });
         }
       }
       return true;
@@ -130,62 +130,62 @@ export class Sale {
   }) {
     const startOfDay =
       parseInt(timestamp) - (parseInt(timestamp) % ONE_DAY_MILISECONDS);
-    // return dynamodb.transactWrite({
-    //   deleteItems: [
-    //     {
-    //       Key: {
-    //         PK: `sales#${slug}#marketplace#${marketplace}`,
-    //         SK: `${timestamp}#txnHash#${txnHash}`,
-    //       },
-    //     },
-    //   ],
-    //   updateItems: [
-    //     {
-    //       Key: {
-    //         PK: `statistics#${slug}`,
-    //         SK: startOfDay.toString(),
-    //       },
-    //       UpdateExpression: `
-    //           ADD #chainvolume :volume,
-    //               #chainvolumeUSD :volumeUSD,
-    //               #marketplacevolume :volume,
-    //               #marketplacevolumeUSD :volumeUSD
-    //         `,
-    //       ExpressionAttributeNames: {
-    //         "#chainvolume": `chain_${chain}_volume`,
-    //         "#chainvolumeUSD": `chain_${chain}_volumeUSD`,
-    //         "#marketplacevolume": `marketplace_${marketplace}_volume`,
-    //         "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
-    //       },
-    //       ExpressionAttributeValues: {
-    //         ":volume": -parseInt(priceBase),
-    //         ":volumeUSD": -parseInt(priceUSD),
-    //       },
-    //     },
-    //     {
-    //       Key: {
-    //         PK: `globalStatistics`,
-    //         SK: startOfDay.toString(),
-    //       },
-    //       UpdateExpression: `
-    //           ADD #chainvolume :volume,
-    //               #chainvolumeUSD :volumeUSD,
-    //               #marketplacevolume :volume,
-    //               #marketplacevolumeUSD :volumeUSD
-    //         `,
-    //       ExpressionAttributeNames: {
-    //         "#chainvolume": `chain_${chain}_volume`,
-    //         "#chainvolumeUSD": `chain_${chain}_volumeUSD`,
-    //         "#marketplacevolume": `marketplace_${marketplace}_volume`,
-    //         "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
-    //       },
-    //       ExpressionAttributeValues: {
-    //         ":volume": -parseInt(priceBase),
-    //         ":volumeUSD": -parseInt(priceUSD),
-    //       },
-    //     },
-    //   ],
-    // });
+    return dynamodb.transactWrite({
+      deleteItems: [
+        {
+          Key: {
+            PK: `sales#${slug}#marketplace#${marketplace}`,
+            SK: `${timestamp}#txnHash#${txnHash}`,
+          },
+        },
+      ],
+      updateItems: [
+        {
+          Key: {
+            PK: `statistics#${slug}`,
+            SK: startOfDay.toString(),
+          },
+          UpdateExpression: `
+              ADD #chainvolume :volume,
+                  #chainvolumeUSD :volumeUSD,
+                  #marketplacevolume :volume,
+                  #marketplacevolumeUSD :volumeUSD
+            `,
+          ExpressionAttributeNames: {
+            "#chainvolume": `chain_${chain}_volume`,
+            "#chainvolumeUSD": `chain_${chain}_volumeUSD`,
+            "#marketplacevolume": `marketplace_${marketplace}_volume`,
+            "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
+          },
+          ExpressionAttributeValues: {
+            ":volume": -parseInt(priceBase),
+            ":volumeUSD": -parseInt(priceUSD),
+          },
+        },
+        {
+          Key: {
+            PK: `globalStatistics`,
+            SK: startOfDay.toString(),
+          },
+          UpdateExpression: `
+              ADD #chainvolume :volume,
+                  #chainvolumeUSD :volumeUSD,
+                  #marketplacevolume :volume,
+                  #marketplacevolumeUSD :volumeUSD
+            `,
+          ExpressionAttributeNames: {
+            "#chainvolume": `chain_${chain}_volume`,
+            "#chainvolumeUSD": `chain_${chain}_volumeUSD`,
+            "#marketplacevolume": `marketplace_${marketplace}_volume`,
+            "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
+          },
+          ExpressionAttributeValues: {
+            ":volume": -parseInt(priceBase),
+            ":volumeUSD": -parseInt(priceUSD),
+          },
+        },
+      ],
+    });
   }
 
   static async getAll({

@@ -233,14 +233,13 @@ export default class X2y2Provider
         chain
       ].getCurrentBlockNumber();
       const lastMatureBlock = currentBlock - MATURE_BLOCK_AGE;
-      // let { lastSyncedBlockNumber } = await AdapterState.getSalesAdapterState(
-      //   this.market,
-      //   chain,
-      //   true,
-      //   deployBlock,
-      //   adapterRunName ?? providerName
-      // );
-      let lastSyncedBlockNumber = 15902968;
+      let { lastSyncedBlockNumber } = await AdapterState.getSalesAdapterState(
+        this.market,
+        chain,
+        true,
+        deployBlock,
+        adapterRunName ?? providerName,
+      );
 
       if (deployBlock && Number.isInteger(deployBlock)) {
         if (lastSyncedBlockNumber < deployBlock) {
@@ -314,20 +313,20 @@ export default class X2y2Provider
             )
           ).filter((e) => !e.removed);
           const queryFilterEnd = performance.now();
-          // this.MetricsReporter.submit(
-          //   `opensea_seaport.${chain}.contract_queryFilter.blockRange`,
-          //   toBlock - fromBlock,
-          // );
-          // this.MetricsReporter.submit(
-          //   `opensea_seaport.${chain}.contract_queryFilter.latency`,
-          //   queryFilterEnd - queryFilterStart,
-          // );
+          this.MetricsReporter.submit(
+            `opensea_seaport.${chain}.contract_queryFilter.blockRange`,
+            toBlock - fromBlock,
+          );
+          this.MetricsReporter.submit(
+            `opensea_seaport.${chain}.contract_queryFilter.latency`,
+            queryFilterEnd - queryFilterStart,
+          );
 
-          // LOGGER.debug(
-          //   `Found ${events.length} events between ${fromBlock} to ${toBlock}`,
-          // );
+          LOGGER.debug(
+            `Found ${events.length} events between ${fromBlock} to ${toBlock}`,
+          );
 
-          // LOGGER.debug("X2Y2 Events", { fromBlock, toBlock, events });
+          LOGGER.debug("X2Y2 Events", { fromBlock, toBlock, events });
 
           if (events.length) {
             this.retrieveBlocks(fromBlock, toBlock, chain);

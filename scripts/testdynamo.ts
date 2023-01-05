@@ -36,28 +36,28 @@ async function main() {
   //   ],
   // });
 
-  // await dynamodb.update({
-  //   Key: {
-  //     PK: `globalStatistics123456`,
-  //     SK: `${timestamp}`,
-  //   },
-  //   UpdateExpression: `
-  //     ADD #chainvolume :volume,
-  //         #chainvolumeUSD :volumeUSD,
-  //         #marketplacevolume :volume,
-  //         #marketplacevolumeUSD :volumeUSD
-  //   `,
-  //   ExpressionAttributeNames: {
-  //     "#chainvolume": `chain_${chain}_volume`,
-  //     "#chainvolumeUSD": `chain_${chain}_volumeUSD`,
-  //     "#marketplacevolume": `marketplace_${marketplace}_volume`,
-  //     "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
-  //   },
-  //   ExpressionAttributeValues: {
-  //     ":volume": volume,
-  //     ":volumeUSD": volumeUSD,
-  //   },
-  // });
+  await dynamodb.update({
+    Key: {
+      PK: `globalStatistics123456`,
+      SK: `${timestamp}`,
+    },
+    UpdateExpression: `
+      ADD #chainvolume :volume,
+          #chainvolumeUSD :volumeUSD,
+          #marketplacevolume :volume,
+          #marketplacevolumeUSD :volumeUSD
+    `,
+    ExpressionAttributeNames: {
+      "#chainvolume": `chain_${chain}_volume`,
+      "#chainvolumeUSD": `chain_${chain}_volumeUSD`,
+      "#marketplacevolume": `marketplace_${marketplace}_volume`,
+      "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
+    },
+    ExpressionAttributeValues: {
+      ":volume": volume,
+      ":volumeUSD": volumeUSD,
+    },
+  });
 
   // await dynamodb.put({
   //   PK: "globalStatistics",

@@ -9,15 +9,15 @@ export class AdapterState {
   lastSyncedBlockNumber: bigint;
 
   static async createMoralisAdapterState(chain: Blockchain) {
-    // await dynamodb.put({
-    //   PK: `adapterState`,
-    //   SK: `moralis#${chain}`,
-    //   lastSyncedBlockNumber: EARLIEST_BLOCK,
-    // });
+    await dynamodb.put({
+      PK: `adapterState`,
+      SK: `moralis#${chain}`,
+      lastSyncedBlockNumber: EARLIEST_BLOCK,
+    });
 
-    // return {
-    //   lastSyncedBlockNumber: EARLIEST_BLOCK,
-    // };
+    return {
+      lastSyncedBlockNumber: EARLIEST_BLOCK,
+    };
   }
 
   static async getMoralisAdapterState(chain: Blockchain) {
@@ -39,41 +39,41 @@ export class AdapterState {
 
   static async updateMoralisLastSyncedBlockNumber(
     chain: Blockchain,
-    blockNumber: number
+    blockNumber: number,
   ) {
-    // return dynamodb.update({
-    //   Key: {
-    //     PK: `adapterState`,
-    //     SK: `moralis#${chain}`,
-    //   },
-    //   UpdateExpression: "SET lastSyncedBlockNumber = :blockNumber",
-    //   ExpressionAttributeValues: {
-    //     ":blockNumber": blockNumber,
-    //   },
-    // });
+    return dynamodb.update({
+      Key: {
+        PK: `adapterState`,
+        SK: `moralis#${chain}`,
+      },
+      UpdateExpression: "SET lastSyncedBlockNumber = :blockNumber",
+      ExpressionAttributeValues: {
+        ":blockNumber": blockNumber,
+      },
+    });
   }
 
   static async createSalesAdapterState(
     marketplace: Marketplace,
     chain: Blockchain = Blockchain.Ethereum,
     startBlock = EARLIEST_BLOCK,
-    contract?: string
+    contract?: string,
   ) {
     if (!startBlock) {
       startBlock = EARLIEST_BLOCK;
     }
 
-    // await dynamodb.put({
-    //   PK: `adapterState`,
-    //   SK: `sales#chain#${chain}#marketplace#${marketplace}${
-    //     contract ? "-" + contract : ""
-    //   }`,
-    //   lastSyncedBlockNumber: startBlock,
-    // });
+    await dynamodb.put({
+      PK: `adapterState`,
+      SK: `sales#chain#${chain}#marketplace#${marketplace}${
+        contract ? "-" + contract : ""
+      }`,
+      lastSyncedBlockNumber: startBlock,
+    });
 
-    // return {
-    //   lastSyncedBlockNumber: startBlock,
-    // };
+    return {
+      lastSyncedBlockNumber: startBlock,
+    };
   }
 
   static async getSalesAdapterState(
@@ -81,7 +81,7 @@ export class AdapterState {
     chain: Blockchain = Blockchain.Ethereum,
     createIfMissing = false,
     defaultBlock?: number,
-    contract?: string
+    contract?: string,
   ) {
     return dynamodb
       .query({
@@ -102,7 +102,7 @@ export class AdapterState {
             marketplace,
             chain,
             defaultBlock,
-            contract
+            contract,
           );
         }
       });
@@ -112,19 +112,19 @@ export class AdapterState {
     marketplace: Marketplace,
     blockNumber: number,
     chain: Blockchain = Blockchain.Ethereum,
-    contract?: string
+    contract?: string,
   ) {
-    // return dynamodb.update({
-    //   Key: {
-    //     PK: `adapterState`,
-    //     SK: `sales#chain#${chain}#marketplace#${marketplace}${
-    //       contract ? "-" + contract : ""
-    //     }`,
-    //   },
-    //   UpdateExpression: "SET lastSyncedBlockNumber = :blockNumber",
-    //   ExpressionAttributeValues: {
-    //     ":blockNumber": blockNumber,
-    //   },
-    // });
+    return dynamodb.update({
+      Key: {
+        PK: `adapterState`,
+        SK: `sales#chain#${chain}#marketplace#${marketplace}${
+          contract ? "-" + contract : ""
+        }`,
+      },
+      UpdateExpression: "SET lastSyncedBlockNumber = :blockNumber",
+      ExpressionAttributeValues: {
+        ":blockNumber": blockNumber,
+      },
+    });
   }
 }

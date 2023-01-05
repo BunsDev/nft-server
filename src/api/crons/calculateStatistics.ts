@@ -413,55 +413,55 @@ export default async function main() {
             )) {
               const kt = `${v.contract}#${timestamp}`;
               if (!deletedOnce[kt]) {
-                // await dynamodb.put({
-                //   PK,
-                //   SK: `${timestamp}`,
-                //   statType: STAT_TYPE,
-                // });
+                await dynamodb.put({
+                  PK,
+                  SK: `${timestamp}`,
+                  statType: STAT_TYPE,
+                });
                 deletedOnce[kt] = true;
               }
-              // await dynamodb.update({
-              //   Key: {
-              //     PK,
-              //     SK: `${timestamp}`,
-              //   },
-              //   UpdateExpression: `
-              //     SET #marketplacevolume = :volume,
-              //         #marketplacevolumeUSD = :volumeUSD
-              //   `,
-              //   ExpressionAttributeNames: {
-              //     "#marketplacevolume": `marketplace_${marketplace}_volume`,
-              //     "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
-              //   },
-              //   ExpressionAttributeValues: {
-              //     ":volume": dailyVolume.volume,
-              //     ":volumeUSD": dailyVolume.volumeUSD,
-              //   },
-              // });
+              await dynamodb.update({
+                Key: {
+                  PK,
+                  SK: `${timestamp}`,
+                },
+                UpdateExpression: `
+                  SET #marketplacevolume = :volume,
+                      #marketplacevolumeUSD = :volumeUSD
+                `,
+                ExpressionAttributeNames: {
+                  "#marketplacevolume": `marketplace_${marketplace}_volume`,
+                  "#marketplacevolumeUSD": `marketplace_${marketplace}_volumeUSD`,
+                },
+                ExpressionAttributeValues: {
+                  ":volume": dailyVolume.volume,
+                  ":volumeUSD": dailyVolume.volumeUSD,
+                },
+              });
             }
           }
         }
 
         for (const [chain, dailyVolumes] of Object.entries(chainVolumes)) {
           for (const [timestamp, dailyVolume] of Object.entries(dailyVolumes)) {
-            // await dynamodb.update({
-            //   Key: {
-            //     PK,
-            //     SK: `${timestamp}`,
-            //   },
-            //   UpdateExpression: `
-            //     SET #chainVolume = :volume,
-            //         #chainVolumeUSD = :volumeUSD
-            //   `,
-            //   ExpressionAttributeNames: {
-            //     "#chainVolume": `chain_${chain}_volume`,
-            //     "#chainVolumeUSD": `chain_${chain}_volumeUSD`,
-            //   },
-            //   ExpressionAttributeValues: {
-            //     ":volume": dailyVolume.volume,
-            //     ":volumeUSD": dailyVolume.volumeUSD,
-            //   },
-            // });
+            await dynamodb.update({
+              Key: {
+                PK,
+                SK: `${timestamp}`,
+              },
+              UpdateExpression: `
+                SET #chainVolume = :volume,
+                    #chainVolumeUSD = :volumeUSD
+              `,
+              ExpressionAttributeNames: {
+                "#chainVolume": `chain_${chain}_volume`,
+                "#chainVolumeUSD": `chain_${chain}_volumeUSD`,
+              },
+              ExpressionAttributeValues: {
+                ":volume": dailyVolume.volume,
+                ":volumeUSD": dailyVolume.volumeUSD,
+              },
+            });
           }
         }
 
@@ -621,12 +621,12 @@ export default async function main() {
                 sale.metadata?.payment?.amount
               ) {
                 if (sale.price > 500 && !sale.priceConfirmed) {
-                  // await dynamodb.put({
-                  //   PK: `suspectSale`,
-                  //   SK: sale.SK,
-                  //   chain: sale.chain,
-                  //   collection: sale.PK,
-                  // });
+                  await dynamodb.put({
+                    PK: `suspectSale`,
+                    SK: sale.SK,
+                    chain: sale.chain,
+                    collection: sale.PK,
+                  });
                   continue;
                 }
               }

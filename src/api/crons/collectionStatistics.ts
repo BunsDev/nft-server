@@ -360,7 +360,7 @@ export default async function main() {
         updateItem,
       });
       try {
-        // await dynamodb.transactWrite({ updateItems: [updateItem] });
+        await dynamodb.transactWrite({ updateItems: [updateItem] });
       } catch (e) {
         LOGGER.error(`Update failed`, {
           PK,

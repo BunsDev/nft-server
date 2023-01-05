@@ -656,7 +656,7 @@ export default async function main() {
             });
         }
 
-        // LOGGER.debug(`Got sales for ${salePK}`, { salePK, saleCursor, sales });
+        LOGGER.debug(`Got sales for ${salePK}`, { salePK, saleCursor, sales });
       } while (saleCursor);
 
       LOGGER.info(`Calculated volumes for sales`, {

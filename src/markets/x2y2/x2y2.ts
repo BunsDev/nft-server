@@ -13,13 +13,14 @@ import { Block } from "@ethersproject/providers";
 import { customMetricsReporter } from "../../utils/metrics";
 import { ClusterWorker, IClusterProvider } from "../../utils/cluster";
 import BaseProvider from "../BaseProvider";
+import { DEFAULT_TOKEN_ADDRESSES } from "../../constants";
 
 const MATURE_BLOCK_AGE = process.env.MATURE_BLOCK_AGE
   ? parseInt(process.env.MATURE_BLOCK_AGE)
   : 250;
-const BLOCK_RANGE = 10; //process.env.EVENT_BLOCK_RANGE
-//   ? parseInt(process.env.EVENT_BLOCK_RANGE)
-//   : 250;
+const BLOCK_RANGE = process.env.EVENT_BLOCK_RANGE
+  ? parseInt(process.env.EVENT_BLOCK_RANGE)
+  : 250;
 
 const LOGGER = getLogger("X2Y2_PROVIDER", {
   datadog: !!process.env.DATADOG_API_KEY,
@@ -44,6 +45,8 @@ type Log = {
 const consts: any = {
   transferTopic:
     "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+  transferTopic2:
+    "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62",
   matchTopic:
     "0xe2c49856b032c255ae7e325d18109bc4e22a2804e2e49a017ec0f59f19cd447b",
   gasToken: "0x0000000000000000000000000000000000000000",
@@ -176,7 +179,7 @@ export default class X2y2Provider
         ),
         ...topic.logs.filter(
           (log: Log) =>
-            consts.transferSingleTopic == log.topics[0] &&
+            consts.transferTopic2 == log.topics[0] &&
             log.topics[2] != consts.nullAddress,
         ),
       ];
@@ -185,16 +188,37 @@ export default class X2y2Provider
         [consts.matchTopic].includes(log.topics[0]),
       );
 
-      if (matches.length != transfers.length && transfers.length > 0)
+      if (matches.length != transfers.length && transfers.length > 0) {
         [transfers, payment] = this.filterTransfers(
           transfers,
           topic,
           transactions[i],
         );
+      } else {
+        payment = {
+          payment: {
+            address: DEFAULT_TOKEN_ADDRESSES[chain],
+            amount: transactions[i].value,
+          },
+          buyer: transactions[i].from,
+        };
+      }
 
-      transfers.map((transfer: Log) =>
-        addTradeToDatas(transfer, payment, datas),
-      );
+      if (datas.length == 0) {
+        datas.push({
+          transactionHash: transfers[0].transactionHash,
+          buyer: payment.buyer,
+          contractAddress: transfers[0].address,
+          tokenIDs: [
+            parseInt(transfers[0].data.substring(2, 66), 16).toString(),
+          ],
+          payment: payment.payment,
+        });
+      } else {
+        transfers.map((transfer: Log) =>
+          addTradeToDatas(transfer, payment, datas),
+        );
+      }
     });
 
     return datas;
@@ -216,7 +240,7 @@ export default class X2y2Provider
       //   deployBlock,
       //   adapterRunName ?? providerName
       // );
-      let lastSyncedBlockNumber = 15890310;
+      let lastSyncedBlockNumber = 15902968;
 
       if (deployBlock && Number.isInteger(deployBlock)) {
         if (lastSyncedBlockNumber < deployBlock) {
@@ -240,11 +264,11 @@ export default class X2y2Provider
           );
 
       if (lastMatureBlock - lastSyncedBlockNumber <= MATURE_BLOCK_AGE) {
-        // LOGGER.error(`Not enough mature blocks to scan.`, {
-        //   currentBlock,
-        //   lastMatureBlock,
-        //   lastSyncedBlockNumber,
-        // });
+        LOGGER.error(`Not enough mature blocks to scan.`, {
+          currentBlock,
+          lastMatureBlock,
+          lastSyncedBlockNumber,
+        });
         return;
       }
 
@@ -262,19 +286,19 @@ export default class X2y2Provider
             ? currentBlock
             : fromBlock + BLOCK_RANGE;
 
-        // LOGGER.debug("Searching blocks: ", {
-        //   fromBlock,
-        //   toBlock,
-        //   range: toBlock - fromBlock,
-        // });
+        LOGGER.debug("Searching blocks: ", {
+          fromBlock,
+          toBlock,
+          range: toBlock - fromBlock,
+        });
 
         if (retryQuery) {
-          // LOGGER.warn(`Retrying query`, {
-          //   fromBlock,
-          //   toBlock,
-          //   range: toBlock - fromBlock,
-          //   retryCount,
-          // });
+          LOGGER.warn(`Retrying query`, {
+            fromBlock,
+            toBlock,
+            range: toBlock - fromBlock,
+            retryCount,
+          });
         }
 
         try {
@@ -303,7 +327,7 @@ export default class X2y2Provider
           //   `Found ${events.length} events between ${fromBlock} to ${toBlock}`,
           // );
 
-          // LOGGER.debug("Seaport Events", { fromBlock, toBlock, events });
+          // LOGGER.debug("X2Y2 Events", { fromBlock, toBlock, events });
 
           if (events.length) {
             this.retrieveBlocks(fromBlock, toBlock, chain);

@@ -72,7 +72,7 @@ const forks: Array<Worker> = [];
 
 function spawnClusterFork(
   forks: Array<Worker>,
-  childSetup: (child: Worker) => void
+  childSetup: (child: Worker) => void,
 ): void {
   const fork = cluster.fork();
   forks.push(fork);
@@ -121,7 +121,7 @@ export default async function main() {
 
     const getUniqueChains = (
       chains: Array<Blockchain>,
-      newChains: Array<Blockchain>
+      newChains: Array<Blockchain>,
     ) => {
       return Array.from(new Set<Blockchain>(chains.concat(newChains)));
     };
@@ -144,7 +144,7 @@ export default async function main() {
       } else {
         saleCollections[k].chains = getUniqueChains(
           saleCollections[k].chains,
-          chains
+          chains,
         );
         if (!saleCollections[k].marketplaces.includes(marketplace)) {
           saleCollections[k].marketplaces.push(marketplace);
@@ -155,7 +155,7 @@ export default async function main() {
     for (const [k, v] of Object.entries(saleCollections)) {
       if (
         [CalcStatSalesState.WRITING, CalcStatSalesState.INPROGRESS].includes(
-          v.status
+          v.status,
         )
       ) {
         v.status = CalcStatSalesState.UNPROCESSED;
@@ -181,7 +181,7 @@ export default async function main() {
         await client.set(COLLECTION_STAT_KEY, JSON.stringify(saleCollections));
       } finally {
         LOGGER.info(
-          `Update Sale Collections took ${performance.now() - start} ms`
+          `Update Sale Collections took ${performance.now() - start} ms`,
         );
         updateInProgress = false;
       }
@@ -250,14 +250,14 @@ export default async function main() {
       if (maybeExitCount > cpus().length) {
         LOGGER.warn(
           `Calc stats might could exit, but hasn't for ${maybeExitCount} tries`,
-          { forks }
+          { forks },
         );
       }
       const hasIncompleteWork = !!Object.keys(saleCollections).find(
         (k) =>
           ![CalcStatSalesState.COMPLETED, CalcStatSalesState.ERROR].includes(
-            saleCollections[k].status
-          )
+            saleCollections[k].status,
+          ),
       );
       if (!forks.length && !hasIncompleteWork) {
         await client.del(COLLECTION_STAT_KEY);
@@ -301,7 +301,7 @@ export default async function main() {
       if (Items.length) {
         for (const item of Items) {
           const uKeys = Array.from(
-            new Set<string>(Object.keys(item).concat(Object.keys(summedStats)))
+            new Set<string>(Object.keys(item).concat(Object.keys(summedStats))),
           );
 
           for (const k of uKeys) {
@@ -360,7 +360,7 @@ export default async function main() {
         updateItem,
       });
       try {
-        await dynamodb.transactWrite({ updateItems: [updateItem] });
+        // await dynamodb.transactWrite({ updateItems: [updateItem] });
       } catch (e) {
         LOGGER.error(`Update failed`, {
           PK,
@@ -385,7 +385,7 @@ export default async function main() {
 function getVolumeForType(
   type: string,
   value: string,
-  stats: Record<string, number>
+  stats: Record<string, number>,
 ): VolumeRecord {
   if (type === "overview") {
     const volume: VolumeRecord = {

@@ -5,7 +5,7 @@ import {
   ChainEvents,
   EventMetadata,
   TxReceiptsWithMetadata,
-  ReceiptLike
+  ReceiptLike,
 } from "../BaseMarketOnChainProvider";
 import { Blockchain, Marketplace } from "../../types";
 import { AdapterState } from "../../models";
@@ -17,12 +17,12 @@ import BaseProvider from "../BaseProvider";
 const MATURE_BLOCK_AGE = process.env.MATURE_BLOCK_AGE
   ? parseInt(process.env.MATURE_BLOCK_AGE)
   : 250;
-const BLOCK_RANGE = process.env.EVENT_BLOCK_RANGE
-  ? parseInt(process.env.EVENT_BLOCK_RANGE)
-  : 250;
+const BLOCK_RANGE = 10; //process.env.EVENT_BLOCK_RANGE
+//   ? parseInt(process.env.EVENT_BLOCK_RANGE)
+//   : 250;
 
 const LOGGER = getLogger("X2Y2_PROVIDER", {
-  datadog: !!process.env.DATADOG_API_KEY
+  datadog: !!process.env.DATADOG_API_KEY,
 });
 type PaymentComplex = {
   payment: Payment;
@@ -51,8 +51,8 @@ const consts: any = {
     "0x0000000000000000000000000000000000000000000000000000000000000000",
   unknownPayment: {
     buyer: undefined,
-    payment: { address: "0x", amount: BigNumber.from(0) }
-  }
+    payment: { address: "0x", amount: BigNumber.from(0) },
+  },
 };
 export type MatchData = {
   transactionHash: string;
@@ -64,7 +64,7 @@ export type MatchData = {
 function addTradeToDatas(
   transfer: Log,
   payment: PaymentComplex,
-  datas: MatchData[]
+  datas: MatchData[],
 ): void {
   let newEntry: MatchData = undefined;
   if (transfer.topics[0] == consts.transferTopic)
@@ -73,11 +73,11 @@ function addTradeToDatas(
       buyer: payment.buyer ?? `0x${transfer.topics[2].substring(26, 66)}`,
       contractAddress: transfer.address,
       tokenIDs: [parseInt(transfer.topics[3], 16).toString()],
-      payment: payment.payment
+      payment: payment.payment,
     };
 
   const swapsInThisBundle = datas.find(
-    (d) => d.transactionHash == newEntry.transactionHash
+    (d) => d.transactionHash == newEntry.transactionHash,
   );
   if (swapsInThisBundle == null) {
     datas.push(newEntry);
@@ -96,13 +96,13 @@ export default class X2y2Provider
   public withWorker(worker: ClusterWorker): void {
     super.withWorker(worker);
     this.MetricsReporter = customMetricsReporter("", "", [
-      `worker:${worker.uuid}`
+      `worker:${worker.uuid}`,
     ]);
   }
 
   public async dispatchWorkMethod(
     method: string,
-    args: unknown[]
+    args: unknown[],
   ): Promise<unknown> {
     return Promise.reject(new Error("Not implemented"));
   }
@@ -140,31 +140,31 @@ export default class X2y2Provider
         transfersProper,
         {
           buyer: `0x${transfersProper[0].topics[2].substring(26, 66)}`,
-          payment: { address: consts.gasToken, amount: transaction.value }
-        }
+          payment: { address: consts.gasToken, amount: transaction.value },
+        },
       ];
     return [
       transfersProper,
       {
         buyer: `0x${erc20Transfer.topics[1].substring(26, 66)}`,
-        payment: { address: erc20Transfer.address, amount }
-      }
+        payment: { address: erc20Transfer.address, amount },
+      },
     ];
   }
 
   private async fetchMatchData(
     chain: Blockchain,
-    events: Array<Event>
+    events: Array<Event>,
   ): Promise<MatchData[]> {
     const datas: MatchData[] = [];
     const provider = this.chains[chain].provider;
     const topics = await Promise.all(
       events.map((e: Event) =>
-        provider.getTransactionReceipt(e.transactionHash)
-      )
+        provider.getTransactionReceipt(e.transactionHash),
+      ),
     );
     const transactions = await Promise.all(
-      events.map((e: Event) => provider.getTransaction(e.transactionHash))
+      events.map((e: Event) => provider.getTransaction(e.transactionHash)),
     );
     topics.map((topic: any, i: number) => {
       let payment: PaymentComplex = consts.unknownPayment;
@@ -172,28 +172,28 @@ export default class X2y2Provider
         ...topic.logs.filter(
           (log: Log) =>
             consts.transferTopic == log.topics[0] &&
-            log.topics[1] != consts.nullAddress
+            log.topics[1] != consts.nullAddress,
         ),
         ...topic.logs.filter(
           (log: Log) =>
             consts.transferSingleTopic == log.topics[0] &&
-            log.topics[2] != consts.nullAddress
-        )
+            log.topics[2] != consts.nullAddress,
+        ),
       ];
 
       const matches: Log[] = topic.logs.filter((log: Log) =>
-        [consts.matchTopic].includes(log.topics[0])
+        [consts.matchTopic].includes(log.topics[0]),
       );
 
       if (matches.length != transfers.length && transfers.length > 0)
         [transfers, payment] = this.filterTransfers(
           transfers,
           topic,
-          transactions[i]
+          transactions[i],
         );
 
       transfers.map((transfer: Log) =>
-        addTradeToDatas(transfer, payment, datas)
+        addTradeToDatas(transfer, payment, datas),
       );
     });
 
@@ -209,13 +209,14 @@ export default class X2y2Provider
         chain
       ].getCurrentBlockNumber();
       const lastMatureBlock = currentBlock - MATURE_BLOCK_AGE;
-      let { lastSyncedBlockNumber } = await AdapterState.getSalesAdapterState(
-        this.market,
-        chain,
-        true,
-        deployBlock,
-        adapterRunName ?? providerName
-      );
+      // let { lastSyncedBlockNumber } = await AdapterState.getSalesAdapterState(
+      //   this.market,
+      //   chain,
+      //   true,
+      //   deployBlock,
+      //   adapterRunName ?? providerName
+      // );
+      let lastSyncedBlockNumber = 15890310;
 
       if (deployBlock && Number.isInteger(deployBlock)) {
         if (lastSyncedBlockNumber < deployBlock) {
@@ -223,7 +224,7 @@ export default class X2y2Provider
             this.market,
             deployBlock,
             chain,
-            adapterRunName ?? providerName
+            adapterRunName ?? providerName,
           );
         }
         lastSyncedBlockNumber = Math.max(deployBlock, lastSyncedBlockNumber);
@@ -233,17 +234,17 @@ export default class X2y2Provider
         ? [this.config.chains[chain].saleTopic]
         : this.contracts[chain].interface.encodeFilterTopics(
             this.contracts[chain].interface.getEvent(
-              this.config.chains[chain].saleEventName
+              this.config.chains[chain].saleEventName,
             ),
-            []
+            [],
           );
 
       if (lastMatureBlock - lastSyncedBlockNumber <= MATURE_BLOCK_AGE) {
-        LOGGER.error(`Not enough mature blocks to scan.`, {
-          currentBlock,
-          lastMatureBlock,
-          lastSyncedBlockNumber
-        });
+        // LOGGER.error(`Not enough mature blocks to scan.`, {
+        //   currentBlock,
+        //   lastMatureBlock,
+        //   lastSyncedBlockNumber,
+        // });
         return;
       }
 
@@ -261,19 +262,19 @@ export default class X2y2Provider
             ? currentBlock
             : fromBlock + BLOCK_RANGE;
 
-        LOGGER.debug("Searching blocks: ", {
-          fromBlock,
-          toBlock,
-          range: toBlock - fromBlock
-        });
+        // LOGGER.debug("Searching blocks: ", {
+        //   fromBlock,
+        //   toBlock,
+        //   range: toBlock - fromBlock,
+        // });
 
         if (retryQuery) {
-          LOGGER.warn(`Retrying query`, {
-            fromBlock,
-            toBlock,
-            range: toBlock - fromBlock,
-            retryCount
-          });
+          // LOGGER.warn(`Retrying query`, {
+          //   fromBlock,
+          //   toBlock,
+          //   range: toBlock - fromBlock,
+          //   retryCount,
+          // });
         }
 
         try {
@@ -282,27 +283,27 @@ export default class X2y2Provider
             await contract.queryFilter(
               {
                 address: contractAddress,
-                topics: filterTopics
+                topics: filterTopics,
               },
               fromBlock,
-              toBlock
+              toBlock,
             )
           ).filter((e) => !e.removed);
           const queryFilterEnd = performance.now();
-          this.MetricsReporter.submit(
-            `opensea_seaport.${chain}.contract_queryFilter.blockRange`,
-            toBlock - fromBlock
-          );
-          this.MetricsReporter.submit(
-            `opensea_seaport.${chain}.contract_queryFilter.latency`,
-            queryFilterEnd - queryFilterStart
-          );
+          // this.MetricsReporter.submit(
+          //   `opensea_seaport.${chain}.contract_queryFilter.blockRange`,
+          //   toBlock - fromBlock,
+          // );
+          // this.MetricsReporter.submit(
+          //   `opensea_seaport.${chain}.contract_queryFilter.latency`,
+          //   queryFilterEnd - queryFilterStart,
+          // );
 
-          LOGGER.debug(
-            `Found ${events.length} events between ${fromBlock} to ${toBlock}`
-          );
+          // LOGGER.debug(
+          //   `Found ${events.length} events between ${fromBlock} to ${toBlock}`,
+          // );
 
-          LOGGER.debug("Seaport Events", { fromBlock, toBlock, events });
+          // LOGGER.debug("Seaport Events", { fromBlock, toBlock, events });
 
           if (events.length) {
             this.retrieveBlocks(fromBlock, toBlock, chain);
@@ -311,20 +312,20 @@ export default class X2y2Provider
             ).reduce(
               (m: Record<string, Block>, b: Block) => ({
                 ...m,
-                [b.number.toString()]: b
+                [b.number.toString()]: b,
               }),
-              {} as Record<string, Block>
+              {} as Record<string, Block>,
             );
 
             const receipts: TxReceiptsWithMetadata = {};
             const matchData: MatchData[] = await this.fetchMatchData(
               chain,
-              events
+              events,
             );
             const parsedEvents = this.parseEventsWithMatchData(
               events,
               chain,
-              matchData
+              matchData,
             );
             for (let i = 0; i < events.length; i++) {
               const event = events[i];
@@ -333,9 +334,9 @@ export default class X2y2Provider
                 receipts[event.transactionHash] = {
                   receipt: {
                     blockNumber: event.blockNumber,
-                    transactionHash: event.transactionHash
+                    transactionHash: event.transactionHash,
                   } as ReceiptLike,
-                  meta: [] as Array<EventMetadata>
+                  meta: [] as Array<EventMetadata>,
                 };
               }
               receipts[event.transactionHash].meta.push(parsed);
@@ -347,11 +348,11 @@ export default class X2y2Provider
               events,
               blockRange: {
                 startBlock: fromBlock,
-                endBlock: toBlock
+                endBlock: toBlock,
               },
               receipts,
               providerName,
-              adapterRunName
+              adapterRunName,
             };
           } else {
             yield {
@@ -359,10 +360,10 @@ export default class X2y2Provider
               events,
               blockRange: {
                 startBlock: fromBlock,
-                endBlock: toBlock
+                endBlock: toBlock,
               },
               providerName,
-              adapterRunName
+              adapterRunName,
             };
           }
 
@@ -374,7 +375,7 @@ export default class X2y2Provider
             reason: e.reason,
             fromBlock,
             toBlock,
-            stack: e.stack.substr(0, 500)
+            stack: e.stack.substr(0, 500),
           });
           if (retryCount < 3) {
             // try again
@@ -393,7 +394,7 @@ export default class X2y2Provider
   public parseEventsWithMatchData(
     events: Array<Event>,
     chain: Blockchain,
-    matchDatas: MatchData[]
+    matchDatas: MatchData[],
   ): Array<EventMetadata> {
     const { providerName } = this.config.chains[chain];
     const meta: Array<EventMetadata> = [];
@@ -401,7 +402,7 @@ export default class X2y2Provider
       const parsed = this.parseLog(event, chain);
       const { to } = parsed.decodedData;
       const matchData = matchDatas.find(
-        (t) => t.transactionHash == event.transactionHash
+        (t) => t.transactionHash == event.transactionHash,
       );
       const count = matchData.tokenIDs.length;
 
@@ -417,13 +418,13 @@ export default class X2y2Provider
         data: {
           parsed,
           event,
-          tokenIDs: count > 1 ? matchData.tokenIDs : null
+          tokenIDs: count > 1 ? matchData.tokenIDs : null,
         },
         hash: event.transactionHash,
         contract: providerName,
         logIndex: event.logIndex,
         blockNumber: event.blockNumber,
-        bundleSale: count > 1
+        bundleSale: count > 1,
       });
     }
     return meta;

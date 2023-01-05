@@ -16,7 +16,7 @@ export class Contract {
           SK: contract.address,
           ...contract,
         }));
-      await dynamodb.batchWrite(items);
+      // await dynamodb.batchWrite(items);
     }
   }
 
@@ -34,11 +34,11 @@ export class Contract {
   }
 
   static async remove(chain: Blockchain, address: string) {
-    return dynamodb.delete({
-      Key: {
-        PK: `contracts#${chain}`,
-        SK: address,
-      },
-    });
+    // return dynamodb.delete({
+    //   Key: {
+    //     PK: `contracts#${chain}`,
+    //     SK: address,
+    //   },
+    // });
   }
 }

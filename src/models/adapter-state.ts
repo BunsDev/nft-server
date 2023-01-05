@@ -39,7 +39,7 @@ export class AdapterState {
 
   static async updateMoralisLastSyncedBlockNumber(
     chain: Blockchain,
-    blockNumber: number
+    blockNumber: number,
   ) {
     return dynamodb.update({
       Key: {
@@ -57,7 +57,7 @@ export class AdapterState {
     marketplace: Marketplace,
     chain: Blockchain = Blockchain.Ethereum,
     startBlock = EARLIEST_BLOCK,
-    contract?: string
+    contract?: string,
   ) {
     if (!startBlock) {
       startBlock = EARLIEST_BLOCK;
@@ -81,7 +81,7 @@ export class AdapterState {
     chain: Blockchain = Blockchain.Ethereum,
     createIfMissing = false,
     defaultBlock?: number,
-    contract?: string
+    contract?: string,
   ) {
     return dynamodb
       .query({
@@ -102,7 +102,7 @@ export class AdapterState {
             marketplace,
             chain,
             defaultBlock,
-            contract
+            contract,
           );
         }
       });
@@ -112,7 +112,7 @@ export class AdapterState {
     marketplace: Marketplace,
     blockNumber: number,
     chain: Blockchain = Blockchain.Ethereum,
-    contract?: string
+    contract?: string,
   ) {
     return dynamodb.update({
       Key: {

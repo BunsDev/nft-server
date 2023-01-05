@@ -26,7 +26,7 @@ export class Collection {
 
   static async createCollectionsFromSales(
     sales: SaleData[],
-    marketplace?: Marketplace
+    marketplace?: Marketplace,
   ): Promise<Record<string, boolean>> {
     const collections: Record<string, boolean> = {};
     const contracts: Array<string> = [];
@@ -254,7 +254,7 @@ export class Collection {
           marketCapUSDArr: statistics.marketCapUSD
             ? [statistics.marketCapUSD]
             : [],
-        }
+        },
       );
 
       // Set chain attribute values
@@ -334,7 +334,7 @@ export class Collection {
         floorUSDArr: statistics.floorUSD ? [statistics.floorUSD] : [],
         marketCapArr: statistics.marketCap ? [statistics.marketCap] : [],
         marketCapUSDArr: statistics.marketCap ? [statistics.marketCapUSD] : [],
-      }
+      },
     );
 
     // Set overview attribute values
@@ -485,7 +485,7 @@ export class Collection {
 
   static async getStatisticsByMarketplace(
     slug: string,
-    marketplace: Marketplace
+    marketplace: Marketplace,
   ) {
     return dynamodb
       .query({

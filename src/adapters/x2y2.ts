@@ -4,7 +4,7 @@ import {
   Collection,
   Sale,
   HistoricalStatistics,
-  AdapterState
+  AdapterState,
 } from "../models";
 import { CurrencyConverter } from "../api/currency-converter";
 import { sleep, handleError, restoreBigNumber, awaitSequence } from "../utils";
@@ -12,7 +12,7 @@ import { Blockchain, Marketplace, SaleData } from "../types";
 import {
   MarketChainConfig,
   MarketConfig,
-  X2y2 as X2y2MarketConfig
+  X2y2 as X2y2MarketConfig,
 } from "../markets";
 import { X2y2Provider } from "../markets/x2y2Provider";
 import { ethers } from "ethers";
@@ -22,7 +22,7 @@ import {
   ClusterManager,
   ClusterWorker,
   IClusterProvider,
-  isPrimary
+  isPrimary,
 } from "../utils/cluster";
 import cluster from "cluster";
 import { IMarketOnChainProvider } from "../interfaces";
@@ -38,17 +38,17 @@ type AdapterProviderConfig = {
 configureLoggerDefaults({
   error: false,
   info: false,
-  debug: false
+  debug: false,
 });
 
 const LOGGER = getLogger("X2Y2_ADAPTER", {
-  datadog: !!process.env.DATADOG_API_KEY
+  datadog: !!process.env.DATADOG_API_KEY,
 });
 
 async function runSales(provider: AdapterProvider): Promise<void> {
   const { data: collections } = await Collection.getSorted({
     marketplace: Marketplace.X2y2,
-    returnAll: true
+    returnAll: true,
   });
 
   const collectionMap: Record<string, any> = collections.reduce((m, c) => {
@@ -70,7 +70,7 @@ async function runSales(provider: AdapterProvider): Promise<void> {
       receipts,
       blocks: blockMap,
       providerName,
-      adapterRunName
+      adapterRunName,
     } = (await nextSales).value as ChainEvents;
     LOGGER.info(`Got ${events.length} sales`);
 
@@ -79,7 +79,7 @@ async function runSales(provider: AdapterProvider): Promise<void> {
         Marketplace.X2y2,
         blockRange.endBlock,
         chain,
-        adapterRunName ?? providerName
+        adapterRunName ?? providerName,
       );
       nextSales = itSales.next();
       continue;
@@ -102,12 +102,12 @@ async function runSales(provider: AdapterProvider): Promise<void> {
       const { contractAddress, price, eventSignatures, data, payment } = meta;
       const formattedPrice = ethers.utils.formatUnits(
         restoreBigNumber(payment.amount),
-        "ether"
+        "ether",
       );
       if (!contractAddress) {
         LOGGER.debug(`Missing contract address. Skipping sale.`, {
           hash,
-          metas
+          metas,
         });
         continue;
       }
@@ -130,7 +130,7 @@ async function runSales(provider: AdapterProvider): Promise<void> {
         bundleSale: meta.bundleSale,
         hasCollection: !!collectionMap[contractAddress],
         blockNumber: receipt.blockNumber,
-        tokenID: meta.tokenID
+        tokenID: meta.tokenID,
       });
     }
 
@@ -141,8 +141,8 @@ async function runSales(provider: AdapterProvider): Promise<void> {
           Sale.insert({
             slug: collectionMap,
             marketplace: Marketplace.X2y2,
-            sales
-          })
+            sales,
+          }),
       );
     } catch (e) {
       const hashes = sales.reduce((hashes, sale) => {
@@ -156,7 +156,7 @@ async function runSales(provider: AdapterProvider): Promise<void> {
       dynamodb.put({
         PK: "failedSales",
         SK: `${providerName}#${Date.now()}`,
-        blockRange
+        blockRange,
       });
     }
 
@@ -164,7 +164,7 @@ async function runSales(provider: AdapterProvider): Promise<void> {
       Marketplace.X2y2,
       blockRange.endBlock,
       chain,
-      adapterRunName ?? providerName
+      adapterRunName ?? providerName,
     );
     nextSales = itSales.next();
   }
@@ -187,7 +187,7 @@ function spawnProviderChild(p: AdapterProviderConfig, run = 0) {
   LOGGER.info(`Spawn Provider Child`, { provider: p, run });
   const providerChild = fork(__filename, [
     "provider-child",
-    p.chainConfig.providerName
+    p.chainConfig.providerName,
   ]);
   providerChild.on("exit", (code) => {
     LOGGER.alert(`Provider Child Exit`, { provider: p, code, run });
@@ -203,7 +203,7 @@ if (!process.argv[2]) {
   const X2Providers = X2y2Provider.build(X2y2MarketConfig);
   const providerName = process.argv[3];
   const config = X2Providers.find(
-    (p) => p.chainConfig.providerName === providerName
+    (p) => p.chainConfig.providerName === providerName,
   );
   const provider = config.instantiate();
   if (cluster.isWorker && config.chainConfig.cluster) {

@@ -82,7 +82,7 @@ const forks: Array<Worker> = [];
 function spawnClusterFork(
   forks: Array<Worker>,
   childSetup: (child: Worker) => void,
-  env: Record<string, any>
+  env: Record<string, any>,
 ): void {
   const fork = cluster.fork(env ?? {});
   forks.push(fork);
@@ -157,7 +157,7 @@ export default async function main() {
   const SALE_TIME_END = extendDate(
     SALE_START_TIME + SALE_TIME_RANGE,
     DATE_TRUNCATE,
-    true
+    true,
   );
 
   if (err) {
@@ -228,7 +228,7 @@ export default async function main() {
 
     const getUniqueChains = (
       chains: Array<Blockchain>,
-      newChains: Array<Blockchain>
+      newChains: Array<Blockchain>,
     ) => {
       return Array.from(new Set<Blockchain>(chains.concat(newChains)));
     };
@@ -256,7 +256,7 @@ export default async function main() {
       } else {
         saleCollections[k].chains = getUniqueChains(
           saleCollections[k].chains,
-          chains
+          chains,
         );
         if (!saleCollections[k].marketplaces.includes(marketplace)) {
           saleCollections[k].marketplaces.push(marketplace);
@@ -266,7 +266,7 @@ export default async function main() {
 
     const getEmptyVolumeStats = (
       chains: Array<Blockchain>,
-      marketplaces: Array<Marketplace>
+      marketplaces: Array<Marketplace>,
     ): VolumeStats => {
       return marketplaces.reduce((stats, m) => {
         stats[m] = chains.reduce((cs, c) => {
@@ -280,7 +280,7 @@ export default async function main() {
     for (const [k, v] of Object.entries(saleCollections)) {
       if (
         [CalcStatSalesState.WRITING, CalcStatSalesState.INPROGRESS].includes(
-          v.status
+          v.status,
         )
       ) {
         v.status = CalcStatSalesState.UNPROCESSED;
@@ -307,7 +307,7 @@ export default async function main() {
         await client.set(COLLECTION_STAT_KEY, JSON.stringify(saleCollections));
       } finally {
         LOGGER.info(
-          `Update Sale Collections took ${performance.now() - start} ms`
+          `Update Sale Collections took ${performance.now() - start} ms`,
         );
         updateInProgress = false;
       }
@@ -406,10 +406,10 @@ export default async function main() {
           for (const [chain, dailyVolumes] of Object.entries(chains)) {
             chainVolumes[<Blockchain>chain] = mergeDailyVolumeRecords(
               chainVolumes[<Blockchain>chain] ?? {},
-              dailyVolumes
+              dailyVolumes,
             );
             for (const [timestamp, dailyVolume] of Object.entries(
-              dailyVolumes
+              dailyVolumes,
             )) {
               const kt = `${v.contract}#${timestamp}`;
               if (!deletedOnce[kt]) {
@@ -482,14 +482,14 @@ export default async function main() {
       if (maybeExitCount > cpus().length) {
         LOGGER.warn(
           `Calc stats might could exit, but hasn't for ${maybeExitCount} tries`,
-          { forks }
+          { forks },
         );
       }
       const hasIncompleteWork = !!Object.keys(saleCollections).find(
         (k) =>
           ![CalcStatSalesState.COMPLETED, CalcStatSalesState.ERROR].includes(
-            saleCollections[k].status
-          )
+            saleCollections[k].status,
+          ),
       );
       if (!forks.length && !hasIncompleteWork) {
         clearInterval(updateInterval);
@@ -561,7 +561,7 @@ export default async function main() {
           {
             marketplace,
             volumes: marketVolumes[marketplace],
-          }
+          },
         );
 
         const { Items, LastEvaluatedKey: cursor } = await dynamodb.query({
@@ -656,7 +656,7 @@ export default async function main() {
             });
         }
 
-        // LOGGER.debug(`Got sales for ${salePK}`, { salePK, saleCursor, sales });
+        LOGGER.debug(`Got sales for ${salePK}`, { salePK, saleCursor, sales });
       } while (saleCursor);
 
       LOGGER.info(`Calculated volumes for sales`, {
@@ -675,7 +675,7 @@ export default async function main() {
             truncateDate(earliestSaleDay, DATE_TRUNCATE),
             truncateDate(latestSaleDay, DATE_TRUNCATE),
           ],
-          DATE_TRUNCATE
+          DATE_TRUNCATE,
         );
       }
     }

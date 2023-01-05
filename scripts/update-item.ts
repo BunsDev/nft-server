@@ -24,5 +24,5 @@ main(
   "adapterState",
   "sales#paintswap",
   "lastSyncedBlockNumber",
-  "23137237"
+  "23137237",
 ).then((result) => console.log(result));

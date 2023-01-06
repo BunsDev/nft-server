@@ -79,6 +79,14 @@ function addTradeToDatas(
       payment: payment.payment,
     };
 
+  if ((transfer.topics[0] = consts.transferTopic2))
+    newEntry = {
+      transactionHash: transfer.transactionHash,
+      buyer: payment.buyer,
+      contractAddress: transfer.address,
+      tokenIDs: [parseInt(transfer.data.substring(2, 66), 16).toString()],
+      payment: payment.payment,
+    };
   const swapsInThisBundle = datas.find(
     (d) => d.transactionHash == newEntry.transactionHash,
   );
@@ -204,21 +212,9 @@ export default class X2y2Provider
         };
       }
 
-      if (datas.length == 0) {
-        datas.push({
-          transactionHash: transfers[0].transactionHash,
-          buyer: payment.buyer,
-          contractAddress: transfers[0].address,
-          tokenIDs: [
-            parseInt(transfers[0].data.substring(2, 66), 16).toString(),
-          ],
-          payment: payment.payment,
-        });
-      } else {
-        transfers.map((transfer: Log) =>
-          addTradeToDatas(transfer, payment, datas),
-        );
-      }
+      transfers.map((transfer: Log) =>
+        addTradeToDatas(transfer, payment, datas),
+      );
     });
 
     return datas;

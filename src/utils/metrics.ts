@@ -31,6 +31,7 @@ export function customMetricsReporter(
       tags: Array<string> = [],
       retryCount = 0
     ): Promise<v1.IntakePayloadAccepted> {
+      return null
       const res = apiInstance.submitMetrics({
         body: {
           series: [
